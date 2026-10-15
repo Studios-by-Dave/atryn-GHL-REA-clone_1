@@ -1,0 +1,869 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── enums ─────────────────────────────
+
+enum UserRole {
+  OWNER
+  ADMIN
+  AGENT
+  CLIENT_USER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum ContactStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum FormStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+enum FormFieldType {
+  TEXT
+  EMAIL
+  PHONE
+  DROPDOWN
+  CHECKBOX
+  TEXTAREA
+  DATE
+  CONSENT
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum WorkflowVersionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum WorkflowTriggerType {
+  FORM_SUBMITTED
+  CONTACT_CREATED
+  TAG_ADDED
+  APPOINTMENT_BOOKED
+  APPOINTMENT_STATUS_CHANGED
+  OPPORTUNITY_STAGE_CHANGED
+  INBOUND_SMS
+  INBOUND_EMAIL
+}
+
+enum WorkflowActionType {
+  WAIT
+  CONDITION
+  SEND_EMAIL
+  SEND_SMS
+  ADD_TAG
+  REMOVE_TAG
+  UPDATE_CONTACT_FIELD
+  CREATE_TASK
+  MOVE_OPPORTUNITY
+  NOTIFY_USER
+  WEBHOOK
+}
+
+enum WorkflowRunStatus {
+  PENDING
+  RUNNING
+  WAITING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum WorkflowRunStepStatus {
+  PENDING
+  WAITING
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum MessageChannel {
+  EMAIL
+  SMS
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum ConversationStatus {
+  OPEN
+  ARCHIVED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+  RESCHEDULED
+}
+
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum CustomFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  DATE
+  CHECKBOX
+  SELECT
+  MULTI_SELECT
+  PHONE
+  EMAIL
+  URL
+  CURRENCY
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+// ───────────────────── tenancy & identity ────────────────────────
+
+model Organization {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  slug             String   @unique
+  timezone         String   @default("UTC")
+  stripeCustomerId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  subAccounts  SubAccount[]
+  memberships  OrgMembership[]
+  auditLogs    AuditLog[]
+  @@index([slug])
+}
+
+model SubAccount {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId       String   @db.Uuid
+  name        String
+  slug        String   @unique // used in URLs: /s/{id} preferred, slug for display/booking
+  timezone    String   @default("UTC")
+  status      String   @default("active") // active | suspended
+  bookingSlug String?  @unique // public /book/{bookingSlug}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org          Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  memberships  SubAccountMembership[]
+  contacts     Contact[]
+  tags         Tag[]
+  customFields CustomField[]
+  pipelines    Pipeline[]
+  forms        Form[]
+  workflows    Workflow[]
+  conversations Conversation[]
+  appointmentTypes AppointmentType[]
+  appointments Appointment[]
+  opportunities Opportunity[]
+  availabilityRules AvailabilityRule[]
+  tasks        Task[]
+  messages     Message[]
+  webhookEvents WebhookEvent[]
+  auditLogs    AuditLog[]
+
+  @@index([orgId, status])
+}
+
+model User {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String   @unique
+  name      String?
+  image     String?
+  passwordHash String? // null when magic-link-only
+  timezone  String   @default("UTC")
+  bookingSlug String? @unique // public per-user booking link
+  lastLoginAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orgMemberships       OrgMembership[]
+  subAccountMemberships SubAccountMembership[]
+  ownedContacts        Contact[]              @relation("ContactOwner")
+  assignedOpportunities Opportunity[]         @relation("OpportunityAssignee")
+  assignedTasks        Task[]                 @relation("TaskAssignee")
+  sentMessages         Message[]              @relation("MessageSender")
+  appointments         Appointment[]          @relation("AppointmentHost")
+  availabilityRules    AvailabilityRule[]
+  notes                ContactNote[]
+  workflowRunsStartedBy WorkflowRun[]         @relation("WorkflowRunTester")
+  auditLogs            AuditLog[]
+}
+
+model OrgMembership {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String           @db.Uuid
+  userId    String           @db.Uuid
+  role      UserRole // OWNER | ADMIN | AGENT (org scope)
+  status    MembershipStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([userId])
+}
+
+model SubAccountMembership {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String           @db.Uuid
+  userId       String           @db.Uuid
+  role         UserRole // ADMIN | AGENT | CLIENT_USER (sub-account scope)
+  status       MembershipStatus @default(ACTIVE)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  subAccount SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([subAccountId, userId])
+  @@index([userId, status])
+}
+
+// ──────────────────────────── CRM ────────────────────────────────
+
+model Contact {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId   String        @db.Uuid
+  firstName      String
+  lastName       String        @default("")
+  email          String?
+  phone          String?
+  company        String?
+  source         String? // form key, manual, import, webhook
+  status         ContactStatus @default(ACTIVE)
+  ownerUserId    String?       @db.Uuid
+  // normalized match keys — dedupe (unique per sub-account; NULLs allowed)
+  emailNormalized String?
+  phoneNormalized String?
+  // consent / opt-out
+  emailOptOutAt  DateTime?
+  smsOptOutAt    DateTime?
+  archivedAt     DateTime?
+  deletedAt      DateTime? // soft delete; hard-delete job purges later
+  lastActivityAt DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  subAccount   SubAccount        @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  owner        User?             @relation("ContactOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  tags         ContactTag[]
+  customValues CustomFieldValue[]
+  notes        ContactNote[]
+  opportunities Opportunity[]
+  forms        FormSubmission[]
+  messages     Message[]
+  conversation Conversation?
+  appointments Appointment[]
+  tasks        Task[]
+  workflowRuns WorkflowRun[]
+  inboundEvents WebhookEvent[]
+
+  @@unique([subAccountId, emailNormalized])
+  @@unique([subAccountId, phoneNormalized])
+  @@index([subAccountId, status, createdAt(sort: Desc)])
+  @@index([subAccountId, lastName, firstName])
+  @@index([subAccountId, ownerUserId, status])
+  @@index([subAccountId, source])
+}
+
+model ContactNote {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String  @db.Uuid
+  contactId   String   @db.Uuid
+  authorUserId String? @db.Uuid
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  author  User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([contactId, createdAt(sort: Desc)])
+}
+
+model Tag {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String  @db.Uuid
+  name        String
+  color       String?
+  createdAt   DateTime @default(now())
+
+  subAccount SubAccount  @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contacts   ContactTag[]
+
+  @@unique([subAccountId, name])
+}
+
+model ContactTag {
+  contactId String   @db.Uuid
+  tagId     String   @db.Uuid
+  addedAt   DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
+}
+
+model CustomField {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String         @db.Uuid
+  name        String
+  key         String // stable machine key: snake_case
+  type        CustomFieldType
+  options     String[] @default([]) // for SELECT / MULTI_SELECT
+  required    Boolean  @default(false)
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  subAccount SubAccount       @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  values     CustomFieldValue[]
+
+  @@unique([subAccountId, key])
+  @@index([subAccountId, position])
+}
+
+model CustomFieldValue {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId  String   @db.Uuid
+  customFieldId String   @db.Uuid
+  contactId     String   @db.Uuid
+  value         Json // string | number | boolean | string[] normalized by field type
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([customFieldId, contactId])
+  @@index([subAccountId, customFieldId])
+}
+
+// ─────────────────── pipelines & opportunities ───────────────────
+
+model Pipeline {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String  @db.Uuid
+  name        String
+  isDefault   Boolean  @default(false)
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subAccount SubAccount      @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  stages     PipelineStage[]
+  opportunities Opportunity[]
+
+  @@index([subAccountId, position])
+}
+
+model PipelineStage {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pipelineId String   @db.Uuid
+  name       String
+  position   Int
+  // probability % and "won/lost terminal" flags feed reporting
+  probability Int    @default(0)
+  isWon      Boolean  @default(false)
+  isLost     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  pipeline      Pipeline                 @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+  movedInFrom   OpportunityStageHistory[] @relation("StageFrom")
+  movedTo       OpportunityStageHistory[] @relation("StageTo")
+
+  @@unique([pipelineId, position])
+  @@index([pipelineId])
+}
+
+model Opportunity {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId      String           @db.Uuid
+  contactId         String           @db.Uuid
+  pipelineId        String           @db.Uuid
+  stageId           String           @db.Uuid
+  name              String
+  value             Decimal          @default(0) @db.Decimal(12, 2)
+  currency          String           @default("USD")
+  status            OpportunityStatus @default(OPEN)
+  expectedCloseDate DateTime?        @db.Timestamptz
+  assignedUserId    String?          @db.Uuid
+  source            String?
+  notes             String?
+  wonAt             DateTime?        @db.Timestamptz
+  lostAt            DateTime?        @db.Timestamptz
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  subAccount SubAccount            @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contact    Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  pipeline   Pipeline              @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage      PipelineStage         @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  assignee   User?                 @relation("OpportunityAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  history    OpportunityStageHistory[]
+  tasks      Task[]
+
+  @@index([subAccountId, status, stageId])
+  @@index([subAccountId, pipelineId, stageId])
+  @@index([subAccountId, assignedUserId, status])
+  @@index([subAccountId, createdAt(sort: Desc)])
+}
+
+model OpportunityStageHistory {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  opportunityId  String   @db.Uuid
+  fromStageId    String?  @db.Uuid
+  toStageId      String   @db.Uuid
+  changedByUserId String? @db.Uuid
+  note           String?
+  createdAt      DateTime @default(now())
+
+  opportunity Opportunity   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  fromStage   PipelineStage? @relation("StageFrom", fields: [fromStageId], references: [id], onDelete: SetNull)
+  toStage     PipelineStage  @relation("StageTo", fields: [toStageId], references: [id], onDelete: Restrict)
+
+  @@index([opportunityId, createdAt])
+}
+
+// ─────────────────────────── forms ──────────────────────────────
+
+model Form {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String     @db.Uuid
+  publicId     String     @unique // short slug → /f/{publicId}
+  name         String
+  status       FormStatus @default(DRAFT)
+  submitLabel  String     @default("Submit")
+  successMessage String   @default("Thanks! We'll be in touch shortly.")
+  redirectUrl  String?
+  notifyUserIds String[]  @default([]) // validated against membership on submit
+  consentText  String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  subAccount  SubAccount       @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  fields      FormField[]
+  submissions FormSubmission[]
+
+  @@index([subAccountId, status])
+}
+
+model FormField {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  formId    String        @db.Uuid
+  label     String
+  name      String // machine key: email, phone, service_type ...
+  type      FormFieldType
+  required  Boolean       @default(false)
+  placeholder String?
+  helpText  String?
+  options   String[]      @default([]) // DROPDOWN choices
+  position  Int           @default(0)
+
+  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, name])
+  @@index([formId, position])
+}
+
+model FormSubmission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String  @db.Uuid
+  formId      String   @db.Uuid
+  contactId   String?  @db.Uuid
+  data        Json // { fieldName: value } raw submission payload
+  // spam protection & attribution metadata
+  honeypotTriggered Boolean @default(false)
+  ipHash       String? // SHA-256(ip + daily pepper), never raw IP
+  userAgent    String?
+  referrer     String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  utmTerm      String?
+  createdAt    DateTime @default(now())
+
+  form    Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([subAccountId, formId, createdAt(sort: Desc)])
+  @@index([contactId, createdAt(sort: Desc)])
+}
+
+// ─────────────────── workflow automation ─────────────────────────
+
+model Workflow {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String        @db.Uuid
+  name        String
+  description  String?
+  status      WorkflowStatus @default(DRAFT)
+  currentVersionId String?   @unique @db.Uuid // published version pointer
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  subAccount      SubAccount        @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  currentVersion  WorkflowVersion?  @relation("PublishedVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions        WorkflowVersion[] @relation("WorkflowVersions")
+  runs            WorkflowRun[]
+
+  @@index([subAccountId, status])
+}
+
+model WorkflowVersion {
+  id          String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId  String                @db.Uuid
+  version     Int
+  status      WorkflowVersionStatus @default(DRAFT)
+  publishedAt DateTime?             @db.Timestamptz
+  createdAt   DateTime              @default(now())
+
+  workflow    Workflow           @relation("WorkflowVersions", fields: [workflowId], references: [id], onDelete: Cascade)
+  publishedFor Workflow?         @relation("PublishedVersion")
+  triggers    WorkflowTrigger[]
+  actions     WorkflowAction[]
+  runs        WorkflowRun[]
+
+  @@unique([workflowId, version])
+  @@index([workflowId, status])
+}
+
+model WorkflowTrigger {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowVersionId String              @db.Uuid
+  type              WorkflowTriggerType
+  // filters: { formId?, tagId?, pipelineStageId?, appointmentTypeId?, allForms? }
+  config            Json                @default("{}")
+  position          Int                 @default(0)
+
+  workflowVersion WorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+
+  @@index([workflowVersionId, type])
+}
+
+model WorkflowAction {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowVersionId String           @db.Uuid
+  type              WorkflowActionType
+  // per-action settings, e.g. { delayMinutes: 60 }, { condition: {...} }, { templateId, subject }
+  config            Json             @default("{}")
+  position          Int // execution order within the version
+
+  workflowVersion WorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  runSteps     WorkflowRunStep[]
+
+  @@unique([workflowVersionId, position])
+  @@index([workflowVersionId])
+}
+
+model WorkflowRun {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId      String            @db.Uuid
+  workflowId        String            @db.Uuid
+  workflowVersionId String            @db.Uuid
+  contactId         String?           @db.Uuid
+  // event that caused the run: { type, payload }
+  triggerEvent      Json
+  status            WorkflowRunStatus @default(PENDING)
+  isTestRun         Boolean           @default(false)
+  startedByUserId   String?           @db.Uuid
+  currentActionPosition Int           @default(0)
+  resumeAt          DateTime?         @db.Timestamptz // durable WAIT bookmark
+  error             String?
+  startedAt         DateTime          @default(now())
+  finishedAt        DateTime?         @db.Timestamptz
+  durationMs        Int?
+
+  workflow        Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowVersion WorkflowVersion  @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
+  contact         Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  startedBy       User?            @relation("WorkflowRunTester", fields: [startedByUserId], references: [id], onDelete: SetNull)
+  steps           WorkflowRunStep[]
+
+  @@index([subAccountId, status, startedAt(sort: Desc)])
+  @@index([workflowId, status])
+  @@index([contactId, startedAt(sort: Desc)])
+  @@index([status, resumeAt]) // reconciliation sweep scans WAITING runs
+}
+
+model WorkflowRunStep {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowRunId String                @db.Uuid
+  actionId      String?               @db.Uuid // null for trigger pseudo-step
+  position      Int
+  actionType    WorkflowActionType? // denormalized for easy reporting
+  status        WorkflowRunStepStatus @default(PENDING)
+  input         Json?
+  output        Json?
+  error         String?
+  startedAt     DateTime?             @db.Timestamptz
+  finishedAt    DateTime?             @db.Timestamptz
+  durationMs    Int?
+
+  workflowRun WorkflowRun   @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  action      WorkflowAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
+
+  // one row per step per run ⇒ BullMQ retries stay idempotent
+  @@unique([workflowRunId, position])
+  @@index([workflowRunId, status])
+}
+
+// ─────────────────────── messaging ───────────────────────────────
+
+model Conversation {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId  String             @db.Uuid
+  contactId     String             @unique @db.Uuid // one conversation per contact (channels mixed within)
+  status        ConversationStatus @default(OPEN)
+  unreadCount   Int                @default(0)
+  lastMessageAt DateTime?          @db.Timestamptz
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  subAccount SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contact    Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages   Message[]
+
+  @@index([subAccountId, status, lastMessageAt(sort: Desc)])
+}
+
+model Message {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String           @db.Uuid
+  conversationId String?        @db.Uuid
+  contactId    String           @db.Uuid
+  channel      MessageChannel
+  direction    MessageDirection
+  status       MessageStatus    @default(QUEUED)
+  subject      String?
+  body         String
+  senderUserId String?          @db.Uuid
+  provider     String? // resend | twilio | mock
+  providerMessageId String?
+  error        String?
+  costMicros   Int? // optional SMS cost tracking
+  sentAt       DateTime?        @db.Timestamptz
+  deliveredAt  DateTime?        @db.Timestamptz
+  failedAt     DateTime?        @db.Timestamptz
+  readAt       DateTime?        @db.Timestamptz
+  metadata     Json             @default("{}") // template, workflow run ref, etc.
+  createdAt    DateTime         @default(now())
+
+  subAccount  SubAccount    @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact     Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  sender      User?         @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+
+  @@index([subAccountId, createdAt(sort: Desc)])
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([contactId, createdAt(sort: Desc)])
+  @@index([providerMessageId]) // webhook status lookups
+}
+
+// ───────────────────── appointments ──────────────────────────────
+
+model AppointmentType {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId  String   @db.Uuid
+  name          String
+  slug          String   @unique
+  description   String?
+  durationMinutes Int    @default(30)
+  bufferMinutes Int      @default(0)
+  location      String? // physical address or "Google Meet"
+  meetingUrl    String?
+  reminderIntervalsMinutes Int[] @default([]) // e.g. [60, 1440]
+  active        Boolean  @default(true)
+  position      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subAccount   SubAccount    @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([subAccountId, active, position])
+}
+
+model Appointment {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId      String            @db.Uuid
+  contactId         String            @db.Uuid
+  appointmentTypeId String?           @db.Uuid
+  hostUserId        String?           @db.Uuid
+  startAt           DateTime          @db.Timestamptz
+  endAt             DateTime          @db.Timestamptz
+  status            AppointmentStatus @default(SCHEDULED)
+  location          String?
+  meetingUrl        String?
+  notes             String?
+  cancelReason      String?
+  rescheduledFromId String?           @unique @db.Uuid // at most one successor per appointment
+  reminderState     Json              @default("{}") // { "60": sentAt, ... }
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  subAccount      SubAccount       @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contact         Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  appointmentType AppointmentType? @relation(fields: [appointmentTypeId], references: [id], onDelete: SetNull)
+  host            User?            @relation("AppointmentHost", fields: [hostUserId], references: [id], onDelete: SetNull)
+  rescheduledFrom Appointment?     @relation("RescheduledFrom", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo   Appointment?     @relation("RescheduledFrom")
+
+  @@index([subAccountId, startAt])
+  @@index([hostUserId, startAt])
+  @@index([contactId, startAt(sort: Desc)])
+  @@index([subAccountId, status, startAt])
+}
+
+model AvailabilityRule {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String     @db.Uuid
+  userId      String      @db.Uuid
+  dayOfWeek   DayOfWeek
+  // minutes from midnight (local to `timezone`): 540 = 09:00, 1020 = 17:00
+  startMinute Int
+  endMinute   Int
+  timezone    String      @default("UTC")
+  date        DateTime?   @db.Timestamptz // null = recurring weekly; set = one-off date
+  createdAt   DateTime    @default(now())
+
+  subAccount SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dayOfWeek])
+  @@index([subAccountId, userId])
+}
+
+// ─────────────────────────── tasks ───────────────────────────────
+
+model Task {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId  String     @db.Uuid
+  title         String
+  description   String?
+  status        TaskStatus @default(OPEN)
+  dueAt         DateTime?  @db.Timestamptz
+  assigneeUserId String?   @db.Uuid
+  contactId     String?    @db.Uuid
+  opportunityId String?    @db.Uuid
+  createdByUserId String?  @db.Uuid
+  completedAt   DateTime?  @db.Timestamptz
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  subAccount  SubAccount  @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  assignee    User?       @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  contact     Contact?    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([subAccountId, status, dueAt])
+  @@index([subAccountId, assigneeUserId, status])
+}
+
+// ───────────────────── audit & webhooks ──────────────────────────
+
+model AuditLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId        String?  @db.Uuid
+  subAccountId String?  @db.Uuid
+  userId       String?  @db.Uuid
+  action       String // e.g. "contact.create", "workflow.publish"
+  entityType   String
+  entityId     String?
+  metadata     Json     @default("{}")
+  ipHash       String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  org        Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  subAccount SubAccount?   @relation(fields: [subAccountId], references: [id], onDelete: SetNull)
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([subAccountId, createdAt(sort: Desc)])
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+}
+
+model WebhookEvent {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider        String // twilio | resend | stripe | internal
+  eventType       String
+  idempotencyKey  String            @unique // provider event id or signed hash
+  subAccountId    String?           @db.Uuid
+  contactId       String?           @db.Uuid
+  status          WebhookEventStatus @default(RECEIVED)
+  payload         Json
+  error           String?
+  receivedAt      DateTime          @default(now())
+  processedAt     DateTime?         @db.Timestamptz
+
+  subAccount SubAccount? @relation(fields: [subAccountId], references: [id], onDelete: SetNull)
+  contact    Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([provider, status, receivedAt(sort: Desc)])
+  @@index([subAccountId, receivedAt(sort: Desc)])
+}
