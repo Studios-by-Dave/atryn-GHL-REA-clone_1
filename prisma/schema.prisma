@@ -185,9 +185,11 @@ model Organization {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  subAccounts  SubAccount[]
-  memberships  OrgMembership[]
-  auditLogs    AuditLog[]
+  subAccounts SubAccount[]
+  memberships OrgMembership[]
+  invitations Invitation[]
+  auditLogs   AuditLog[]
+
   @@index([slug])
 }
 
@@ -202,50 +204,55 @@ model SubAccount {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  org          Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  memberships  SubAccountMembership[]
-  contacts     Contact[]
-  tags         Tag[]
-  customFields CustomField[]
-  pipelines    Pipeline[]
-  forms        Form[]
-  workflows    Workflow[]
-  conversations Conversation[]
-  appointmentTypes AppointmentType[]
-  appointments Appointment[]
-  opportunities Opportunity[]
+  org               Organization           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  memberships       SubAccountMembership[]
+  invitations       Invitation[]
+  contacts          Contact[]
+  tags              Tag[]
+  customFields      CustomField[]
+  pipelines         Pipeline[]
+  forms             Form[]
+  workflows         Workflow[]
+  conversations     Conversation[]
+  appointmentTypes  AppointmentType[]
+  appointments      Appointment[]
+  opportunities     Opportunity[]
   availabilityRules AvailabilityRule[]
-  tasks        Task[]
-  messages     Message[]
-  webhookEvents WebhookEvent[]
-  auditLogs    AuditLog[]
+  tasks             Task[]
+  messages          Message[]
+  webhookEvents     WebhookEvent[]
+  auditLogs         AuditLog[]
 
   @@index([orgId, status])
 }
 
 model User {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email     String   @unique
-  name      String?
-  image     String?
-  passwordHash String? // null when magic-link-only
-  timezone  String   @default("UTC")
-  bookingSlug String? @unique // public per-user booking link
-  lastLoginAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  passwordHash  String? // null when magic-link-only
+  timezone      String    @default("UTC")
+  bookingSlug   String?   @unique // public per-user booking link
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  orgMemberships       OrgMembership[]
+  orgMemberships        OrgMembership[]
   subAccountMemberships SubAccountMembership[]
-  ownedContacts        Contact[]              @relation("ContactOwner")
-  assignedOpportunities Opportunity[]         @relation("OpportunityAssignee")
-  assignedTasks        Task[]                 @relation("TaskAssignee")
-  sentMessages         Message[]              @relation("MessageSender")
-  appointments         Appointment[]          @relation("AppointmentHost")
-  availabilityRules    AvailabilityRule[]
-  notes                ContactNote[]
-  workflowRunsStartedBy WorkflowRun[]         @relation("WorkflowRunTester")
-  auditLogs            AuditLog[]
+  accounts              Account[]
+  sessions              Session[]
+  invitationsSent       Invitation[]           @relation("InvitationSender")
+  ownedContacts         Contact[]              @relation("ContactOwner")
+  assignedOpportunities Opportunity[]          @relation("OpportunityAssignee")
+  assignedTasks         Task[]                 @relation("TaskAssignee")
+  sentMessages          Message[]              @relation("MessageSender")
+  appointments          Appointment[]          @relation("AppointmentHost")
+  availabilityRules     AvailabilityRule[]
+  notes                 ContactNote[]
+  workflowRunsStartedBy WorkflowRun[]          @relation("WorkflowRunTester")
+  auditLogs             AuditLog[]
 }
 
 model OrgMembership {
@@ -280,43 +287,102 @@ model SubAccountMembership {
   @@index([userId, status])
 }
 
+model Invitation {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId           String    @db.Uuid
+  subAccountId    String?   @db.Uuid
+  invitedByUserId String    @db.Uuid
+  email           String
+  role            UserRole
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subAccount SubAccount?  @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  invitedBy  User         @relation("InvitationSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([email, expiresAt])
+  @@index([orgId, createdAt(sort: Desc)])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String   @db.Uuid
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
 // ──────────────────────────── CRM ────────────────────────────────
 
 model Contact {
-  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId   String        @db.Uuid
-  firstName      String
-  lastName       String        @default("")
-  email          String?
-  phone          String?
-  company        String?
-  source         String? // form key, manual, import, webhook
-  status         ContactStatus @default(ACTIVE)
-  ownerUserId    String?       @db.Uuid
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId    String        @db.Uuid
+  firstName       String
+  lastName        String        @default("")
+  email           String?
+  phone           String?
+  company         String?
+  source          String? // form key, manual, import, webhook
+  status          ContactStatus @default(ACTIVE)
+  ownerUserId     String?       @db.Uuid
   // normalized match keys — dedupe (unique per sub-account; NULLs allowed)
   emailNormalized String?
   phoneNormalized String?
   // consent / opt-out
-  emailOptOutAt  DateTime?
-  smsOptOutAt    DateTime?
-  archivedAt     DateTime?
-  deletedAt      DateTime? // soft delete; hard-delete job purges later
-  lastActivityAt DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  emailOptOutAt   DateTime?
+  smsOptOutAt     DateTime?
+  archivedAt      DateTime?
+  deletedAt       DateTime? // soft delete; hard-delete job purges later
+  lastActivityAt  DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  subAccount   SubAccount        @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
-  owner        User?             @relation("ContactOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  tags         ContactTag[]
-  customValues CustomFieldValue[]
-  notes        ContactNote[]
+  subAccount    SubAccount         @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  owner         User?              @relation("ContactOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  tags          ContactTag[]
+  customValues  CustomFieldValue[]
+  notes         ContactNote[]
   opportunities Opportunity[]
-  forms        FormSubmission[]
-  messages     Message[]
-  conversation Conversation?
-  appointments Appointment[]
-  tasks        Task[]
-  workflowRuns WorkflowRun[]
+  forms         FormSubmission[]
+  messages      Message[]
+  conversation  Conversation?
+  appointments  Appointment[]
+  tasks         Task[]
+  workflowRuns  WorkflowRun[]
   inboundEvents WebhookEvent[]
 
   @@unique([subAccountId, emailNormalized])
@@ -328,13 +394,13 @@ model Contact {
 }
 
 model ContactNote {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String  @db.Uuid
-  contactId   String   @db.Uuid
-  authorUserId String? @db.Uuid
-  body        String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String   @db.Uuid
+  contactId    String   @db.Uuid
+  authorUserId String?  @db.Uuid
+  body         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
   author  User?   @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
@@ -343,13 +409,13 @@ model ContactNote {
 }
 
 model Tag {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String  @db.Uuid
-  name        String
-  color       String?
-  createdAt   DateTime @default(now())
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String   @db.Uuid
+  name         String
+  color        String?
+  createdAt    DateTime @default(now())
 
-  subAccount SubAccount  @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  subAccount SubAccount   @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
   contacts   ContactTag[]
 
   @@unique([subAccountId, name])
@@ -368,17 +434,17 @@ model ContactTag {
 }
 
 model CustomField {
-  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String         @db.Uuid
-  name        String
-  key         String // stable machine key: snake_case
-  type        CustomFieldType
-  options     String[] @default([]) // for SELECT / MULTI_SELECT
-  required    Boolean  @default(false)
-  position    Int      @default(0)
-  createdAt   DateTime @default(now())
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String          @db.Uuid
+  name         String
+  key          String // stable machine key: snake_case
+  type         CustomFieldType
+  options      String[]        @default([]) // for SELECT / MULTI_SELECT
+  required     Boolean         @default(false)
+  position     Int             @default(0)
+  createdAt    DateTime        @default(now())
 
-  subAccount SubAccount       @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  subAccount SubAccount         @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
   values     CustomFieldValue[]
 
   @@unique([subAccountId, key])
@@ -404,33 +470,33 @@ model CustomFieldValue {
 // ─────────────────── pipelines & opportunities ───────────────────
 
 model Pipeline {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String  @db.Uuid
-  name        String
-  isDefault   Boolean  @default(false)
-  position    Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String   @db.Uuid
+  name         String
+  isDefault    Boolean  @default(false)
+  position     Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  subAccount SubAccount      @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
-  stages     PipelineStage[]
+  subAccount    SubAccount      @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  stages        PipelineStage[]
   opportunities Opportunity[]
 
   @@index([subAccountId, position])
 }
 
 model PipelineStage {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  pipelineId String   @db.Uuid
-  name       String
-  position   Int
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pipelineId  String   @db.Uuid
+  name        String
+  position    Int
   // probability % and "won/lost terminal" flags feed reporting
-  probability Int    @default(0)
-  isWon      Boolean  @default(false)
-  isLost     Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  probability Int      @default(0)
+  isWon       Boolean  @default(false)
+  isLost      Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
-  pipeline      Pipeline                 @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  pipeline      Pipeline                  @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   opportunities Opportunity[]
   movedInFrom   OpportunityStageHistory[] @relation("StageFrom")
   movedTo       OpportunityStageHistory[] @relation("StageTo")
@@ -440,29 +506,29 @@ model PipelineStage {
 }
 
 model Opportunity {
-  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId      String           @db.Uuid
-  contactId         String           @db.Uuid
-  pipelineId        String           @db.Uuid
-  stageId           String           @db.Uuid
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId      String            @db.Uuid
+  contactId         String            @db.Uuid
+  pipelineId        String            @db.Uuid
+  stageId           String            @db.Uuid
   name              String
-  value             Decimal          @default(0) @db.Decimal(12, 2)
-  currency          String           @default("USD")
+  value             Decimal           @default(0) @db.Decimal(12, 2)
+  currency          String            @default("USD")
   status            OpportunityStatus @default(OPEN)
-  expectedCloseDate DateTime?        @db.Timestamptz
-  assignedUserId    String?          @db.Uuid
+  expectedCloseDate DateTime?         @db.Timestamptz
+  assignedUserId    String?           @db.Uuid
   source            String?
   notes             String?
-  wonAt             DateTime?        @db.Timestamptz
-  lostAt            DateTime?        @db.Timestamptz
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  wonAt             DateTime?         @db.Timestamptz
+  lostAt            DateTime?         @db.Timestamptz
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
-  subAccount SubAccount            @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
-  contact    Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  pipeline   Pipeline              @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  stage      PipelineStage         @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  assignee   User?                 @relation("OpportunityAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  subAccount SubAccount                @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contact    Contact                   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  pipeline   Pipeline                  @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage      PipelineStage             @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  assignee   User?                     @relation("OpportunityAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
   history    OpportunityStageHistory[]
   tasks      Task[]
 
@@ -473,15 +539,15 @@ model Opportunity {
 }
 
 model OpportunityStageHistory {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  opportunityId  String   @db.Uuid
-  fromStageId    String?  @db.Uuid
-  toStageId      String   @db.Uuid
-  changedByUserId String? @db.Uuid
-  note           String?
-  createdAt      DateTime @default(now())
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  opportunityId   String   @db.Uuid
+  fromStageId     String?  @db.Uuid
+  toStageId       String   @db.Uuid
+  changedByUserId String?  @db.Uuid
+  note            String?
+  createdAt       DateTime @default(now())
 
-  opportunity Opportunity   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  opportunity Opportunity    @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   fromStage   PipelineStage? @relation("StageFrom", fields: [fromStageId], references: [id], onDelete: SetNull)
   toStage     PipelineStage  @relation("StageTo", fields: [toStageId], references: [id], onDelete: Restrict)
 
@@ -491,18 +557,18 @@ model OpportunityStageHistory {
 // ─────────────────────────── forms ──────────────────────────────
 
 model Form {
-  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String     @db.Uuid
-  publicId     String     @unique // short slug → /f/{publicId}
-  name         String
-  status       FormStatus @default(DRAFT)
-  submitLabel  String     @default("Submit")
-  successMessage String   @default("Thanks! We'll be in touch shortly.")
-  redirectUrl  String?
-  notifyUserIds String[]  @default([]) // validated against membership on submit
-  consentText  String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId   String     @db.Uuid
+  publicId       String     @unique // short slug → /f/{publicId}
+  name           String
+  status         FormStatus @default(DRAFT)
+  submitLabel    String     @default("Submit")
+  successMessage String     @default("Thanks! We'll be in touch shortly.")
+  redirectUrl    String?
+  notifyUserIds  String[]   @default([]) // validated against membership on submit
+  consentText    String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   subAccount  SubAccount       @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
   fields      FormField[]
@@ -512,16 +578,16 @@ model Form {
 }
 
 model FormField {
-  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  formId    String        @db.Uuid
-  label     String
-  name      String // machine key: email, phone, service_type ...
-  type      FormFieldType
-  required  Boolean       @default(false)
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  formId      String        @db.Uuid
+  label       String
+  name        String // machine key: email, phone, service_type ...
+  type        FormFieldType
+  required    Boolean       @default(false)
   placeholder String?
-  helpText  String?
-  options   String[]      @default([]) // DROPDOWN choices
-  position  Int           @default(0)
+  helpText    String?
+  options     String[]      @default([]) // DROPDOWN choices
+  position    Int           @default(0)
 
   form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
 
@@ -530,22 +596,22 @@ model FormField {
 }
 
 model FormSubmission {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String  @db.Uuid
-  formId      String   @db.Uuid
-  contactId   String?  @db.Uuid
-  data        Json // { fieldName: value } raw submission payload
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId      String   @db.Uuid
+  formId            String   @db.Uuid
+  contactId         String?  @db.Uuid
+  data              Json // { fieldName: value } raw submission payload
   // spam protection & attribution metadata
-  honeypotTriggered Boolean @default(false)
-  ipHash       String? // SHA-256(ip + daily pepper), never raw IP
-  userAgent    String?
-  referrer     String?
-  utmSource    String?
-  utmMedium    String?
-  utmCampaign  String?
-  utmContent   String?
-  utmTerm      String?
-  createdAt    DateTime @default(now())
+  honeypotTriggered Boolean  @default(false)
+  ipHash            String? // SHA-256(ip + daily pepper), never raw IP
+  userAgent         String?
+  referrer          String?
+  utmSource         String?
+  utmMedium         String?
+  utmCampaign       String?
+  utmContent        String?
+  utmTerm           String?
+  createdAt         DateTime @default(now())
 
   form    Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
   contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
@@ -557,19 +623,19 @@ model FormSubmission {
 // ─────────────────── workflow automation ─────────────────────────
 
 model Workflow {
-  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String        @db.Uuid
-  name        String
-  description  String?
-  status      WorkflowStatus @default(DRAFT)
-  currentVersionId String?   @unique @db.Uuid // published version pointer
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId     String         @db.Uuid
+  name             String
+  description      String?
+  status           WorkflowStatus @default(DRAFT)
+  currentVersionId String?        @unique @db.Uuid // published version pointer
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  subAccount      SubAccount        @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
-  currentVersion  WorkflowVersion?  @relation("PublishedVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
-  versions        WorkflowVersion[] @relation("WorkflowVersions")
-  runs            WorkflowRun[]
+  subAccount     SubAccount        @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  currentVersion WorkflowVersion?  @relation("PublishedVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions       WorkflowVersion[] @relation("WorkflowVersions")
+  runs           WorkflowRun[]
 
   @@index([subAccountId, status])
 }
@@ -582,11 +648,11 @@ model WorkflowVersion {
   publishedAt DateTime?             @db.Timestamptz
   createdAt   DateTime              @default(now())
 
-  workflow    Workflow           @relation("WorkflowVersions", fields: [workflowId], references: [id], onDelete: Cascade)
+  workflow     Workflow          @relation("WorkflowVersions", fields: [workflowId], references: [id], onDelete: Cascade)
   publishedFor Workflow?         @relation("PublishedVersion")
-  triggers    WorkflowTrigger[]
-  actions     WorkflowAction[]
-  runs        WorkflowRun[]
+  triggers     WorkflowTrigger[]
+  actions      WorkflowAction[]
+  runs         WorkflowRun[]
 
   @@unique([workflowId, version])
   @@index([workflowId, status])
@@ -606,42 +672,42 @@ model WorkflowTrigger {
 }
 
 model WorkflowAction {
-  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workflowVersionId String           @db.Uuid
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowVersionId String             @db.Uuid
   type              WorkflowActionType
   // per-action settings, e.g. { delayMinutes: 60 }, { condition: {...} }, { templateId, subject }
-  config            Json             @default("{}")
+  config            Json               @default("{}")
   position          Int // execution order within the version
 
-  workflowVersion WorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
-  runSteps     WorkflowRunStep[]
+  workflowVersion WorkflowVersion   @relation(fields: [workflowVersionId], references: [id], onDelete: Cascade)
+  runSteps        WorkflowRunStep[]
 
   @@unique([workflowVersionId, position])
   @@index([workflowVersionId])
 }
 
 model WorkflowRun {
-  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId      String            @db.Uuid
-  workflowId        String            @db.Uuid
-  workflowVersionId String            @db.Uuid
-  contactId         String?           @db.Uuid
+  id                    String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId          String            @db.Uuid
+  workflowId            String            @db.Uuid
+  workflowVersionId     String            @db.Uuid
+  contactId             String?           @db.Uuid
   // event that caused the run: { type, payload }
-  triggerEvent      Json
-  status            WorkflowRunStatus @default(PENDING)
-  isTestRun         Boolean           @default(false)
-  startedByUserId   String?           @db.Uuid
-  currentActionPosition Int           @default(0)
-  resumeAt          DateTime?         @db.Timestamptz // durable WAIT bookmark
-  error             String?
-  startedAt         DateTime          @default(now())
-  finishedAt        DateTime?         @db.Timestamptz
-  durationMs        Int?
+  triggerEvent          Json
+  status                WorkflowRunStatus @default(PENDING)
+  isTestRun             Boolean           @default(false)
+  startedByUserId       String?           @db.Uuid
+  currentActionPosition Int               @default(0)
+  resumeAt              DateTime?         @db.Timestamptz // durable WAIT bookmark
+  error                 String?
+  startedAt             DateTime          @default(now())
+  finishedAt            DateTime?         @db.Timestamptz
+  durationMs            Int?
 
-  workflow        Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  workflowVersion WorkflowVersion  @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
-  contact         Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  startedBy       User?            @relation("WorkflowRunTester", fields: [startedByUserId], references: [id], onDelete: SetNull)
+  workflow        Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowVersion WorkflowVersion   @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
+  contact         Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  startedBy       User?             @relation("WorkflowRunTester", fields: [startedByUserId], references: [id], onDelete: SetNull)
   steps           WorkflowRunStep[]
 
   @@index([subAccountId, status, startedAt(sort: Desc)])
@@ -664,7 +730,7 @@ model WorkflowRunStep {
   finishedAt    DateTime?             @db.Timestamptz
   durationMs    Int?
 
-  workflowRun WorkflowRun   @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  workflowRun WorkflowRun     @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
   action      WorkflowAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
 
   // one row per step per run ⇒ BullMQ retries stay idempotent
@@ -692,31 +758,31 @@ model Conversation {
 }
 
 model Message {
-  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String           @db.Uuid
-  conversationId String?        @db.Uuid
-  contactId    String           @db.Uuid
-  channel      MessageChannel
-  direction    MessageDirection
-  status       MessageStatus    @default(QUEUED)
-  subject      String?
-  body         String
-  senderUserId String?          @db.Uuid
-  provider     String? // resend | twilio | mock
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId      String           @db.Uuid
+  conversationId    String?          @db.Uuid
+  contactId         String           @db.Uuid
+  channel           MessageChannel
+  direction         MessageDirection
+  status            MessageStatus    @default(QUEUED)
+  subject           String?
+  body              String
+  senderUserId      String?          @db.Uuid
+  provider          String? // resend | twilio | mock
   providerMessageId String?
-  error        String?
-  costMicros   Int? // optional SMS cost tracking
-  sentAt       DateTime?        @db.Timestamptz
-  deliveredAt  DateTime?        @db.Timestamptz
-  failedAt     DateTime?        @db.Timestamptz
-  readAt       DateTime?        @db.Timestamptz
-  metadata     Json             @default("{}") // template, workflow run ref, etc.
-  createdAt    DateTime         @default(now())
+  error             String?
+  costMicros        Int? // optional SMS cost tracking
+  sentAt            DateTime?        @db.Timestamptz
+  deliveredAt       DateTime?        @db.Timestamptz
+  failedAt          DateTime?        @db.Timestamptz
+  readAt            DateTime?        @db.Timestamptz
+  metadata          Json             @default("{}") // template, workflow run ref, etc.
+  createdAt         DateTime         @default(now())
 
-  subAccount  SubAccount    @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  subAccount   SubAccount    @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  contact     Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  sender      User?         @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  contact      Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  sender       User?         @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
 
   @@index([subAccountId, createdAt(sort: Desc)])
   @@index([conversationId, createdAt(sort: Desc)])
@@ -727,20 +793,20 @@ model Message {
 // ───────────────────── appointments ──────────────────────────────
 
 model AppointmentType {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId  String   @db.Uuid
-  name          String
-  slug          String   @unique
-  description   String?
-  durationMinutes Int    @default(30)
-  bufferMinutes Int      @default(0)
-  location      String? // physical address or "Google Meet"
-  meetingUrl    String?
-  reminderIntervalsMinutes Int[] @default([]) // e.g. [60, 1440]
-  active        Boolean  @default(true)
-  position      Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId             String   @db.Uuid
+  name                     String
+  slug                     String   @unique
+  description              String?
+  durationMinutes          Int      @default(30)
+  bufferMinutes            Int      @default(0)
+  location                 String? // physical address or "Google Meet"
+  meetingUrl               String?
+  reminderIntervalsMinutes Int[]    @default([]) // e.g. [60, 1440]
+  active                   Boolean  @default(true)
+  position                 Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   subAccount   SubAccount    @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
   appointments Appointment[]
@@ -780,16 +846,16 @@ model Appointment {
 }
 
 model AvailabilityRule {
-  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId String     @db.Uuid
-  userId      String      @db.Uuid
-  dayOfWeek   DayOfWeek
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId String    @db.Uuid
+  userId       String    @db.Uuid
+  dayOfWeek    DayOfWeek
   // minutes from midnight (local to `timezone`): 540 = 09:00, 1020 = 17:00
-  startMinute Int
-  endMinute   Int
-  timezone    String      @default("UTC")
-  date        DateTime?   @db.Timestamptz // null = recurring weekly; set = one-off date
-  createdAt   DateTime    @default(now())
+  startMinute  Int
+  endMinute    Int
+  timezone     String    @default("UTC")
+  date         DateTime? @db.Timestamptz // null = recurring weekly; set = one-off date
+  createdAt    DateTime  @default(now())
 
   subAccount SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -801,23 +867,23 @@ model AvailabilityRule {
 // ─────────────────────────── tasks ───────────────────────────────
 
 model Task {
-  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subAccountId  String     @db.Uuid
-  title         String
-  description   String?
-  status        TaskStatus @default(OPEN)
-  dueAt         DateTime?  @db.Timestamptz
-  assigneeUserId String?   @db.Uuid
-  contactId     String?    @db.Uuid
-  opportunityId String?    @db.Uuid
-  createdByUserId String?  @db.Uuid
-  completedAt   DateTime?  @db.Timestamptz
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subAccountId    String     @db.Uuid
+  title           String
+  description     String?
+  status          TaskStatus @default(OPEN)
+  dueAt           DateTime?  @db.Timestamptz
+  assigneeUserId  String?    @db.Uuid
+  contactId       String?    @db.Uuid
+  opportunityId   String?    @db.Uuid
+  createdByUserId String?    @db.Uuid
+  completedAt     DateTime?  @db.Timestamptz
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  subAccount  SubAccount  @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
-  assignee    User?       @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
-  contact     Contact?    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  subAccount  SubAccount   @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
 
   @@index([subAccountId, status, dueAt])
@@ -849,17 +915,17 @@ model AuditLog {
 }
 
 model WebhookEvent {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  provider        String // twilio | resend | stripe | internal
-  eventType       String
-  idempotencyKey  String            @unique // provider event id or signed hash
-  subAccountId    String?           @db.Uuid
-  contactId       String?           @db.Uuid
-  status          WebhookEventStatus @default(RECEIVED)
-  payload         Json
-  error           String?
-  receivedAt      DateTime          @default(now())
-  processedAt     DateTime?         @db.Timestamptz
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider       String // twilio | resend | stripe | internal
+  eventType      String
+  idempotencyKey String             @unique // provider event id or signed hash
+  subAccountId   String?            @db.Uuid
+  contactId      String?            @db.Uuid
+  status         WebhookEventStatus @default(RECEIVED)
+  payload        Json
+  error          String?
+  receivedAt     DateTime           @default(now())
+  processedAt    DateTime?          @db.Timestamptz
 
   subAccount SubAccount? @relation(fields: [subAccountId], references: [id], onDelete: SetNull)
   contact    Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)

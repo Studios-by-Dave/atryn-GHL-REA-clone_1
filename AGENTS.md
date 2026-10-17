@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Project state & session handoff
 
-_Last updated: 2026-10-15_
+_Last updated: 2026-10-17_
 
 ## ⏰ Reminders for next session
 
@@ -25,7 +25,8 @@ _Last updated: 2026-10-15_
 ## Current state
 
 - **Done:** T1 foundation — schema, 2 migrations (incl. double-booking GiST exclusion constraint, verified), seed, gates green (`lint`, `typecheck`, `test`, `build`). Pushed to `master` @ `dec8eaf`.
-- **Next:** T2 — Auth.js wiring, org/sub-account provisioning, membership/auditing, tenant context + RBAC guards (see `docs/INITIAL_DELIVERABLE.md` for tickets and roadmap).
+- **In progress:** T2 — Auth.js email-link login, hashed one-time invites, org/sub-account provisioning, membership auditing, DB-derived tenant context, RBAC guards, and demo users for all four roles are implemented. Build, typecheck, lint, Prisma validation, and 57 focused tests pass.
+- **Next:** Apply and verify `20261017183000_auth_tenancy` against PostgreSQL (Docker is unavailable in the current environment), smoke-test each seeded user's magic link/invite flow, then proceed to T3.
 - Roadmap, full schema, access matrix: `docs/INITIAL_DELIVERABLE.md`.
 - Dev DB containers: `atryn-pg`, `atryn-redis`, `atryn-mailpit` (may still be running; recreate with `docker run` — see gotchas).
 

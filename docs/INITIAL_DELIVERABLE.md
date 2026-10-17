@@ -1207,7 +1207,7 @@ IP_HASH_PEPPER=""              # rotating pepper for IP hashing
 - **Goal:** users log in; every request knows `{ orgId, subAccountId, userId, role }`; access denied by default.
 - **Touches:** Auth.js config, `src/server/tenant/*`, `src/server/rbac/*` (+ permission matrix + tests), audit writer, invite/accept flow, org + sub-account provisioning actions, middleware protecting `/(app)`.
 - **Acceptance:** each of the 4 roles can log in; cross-tenant URL probing returns typed 403; RBAC test suite covers role × action incl. denials; audit rows written for membership changes.
-- **QA:** manual role-hopping script (documented in ticket).
+- **QA:** seed the four `@demo.local` users, request each sign-in link, then verify `OWNER`, `ADMIN`, `AGENT`, and `CLIENT_USER` permissions and cross-tenant denials before using an invitation as a second user.
 
 ### T3 — App shell: sub-account switcher & navigation
 - **Goal:** authenticated dashboard chrome with working tenant switching and empty states.

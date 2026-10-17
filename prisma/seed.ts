@@ -43,23 +43,58 @@ async function main(): Promise<void> {
     },
   });
 
-  await prisma.orgMembership.upsert({
-    where: { orgId_userId: { orgId: org.id, userId: owner.id } },
+  const admin = await prisma.user.upsert({
+    where: { email: "admin@demo.local" },
     update: {},
-    create: { orgId: org.id, userId: owner.id, role: "OWNER" },
+    create: { email: "admin@demo.local", name: "Demo Admin" },
+  });
+  const agent = await prisma.user.upsert({
+    where: { email: "agent@demo.local" },
+    update: {},
+    create: { email: "agent@demo.local", name: "Demo Agent" },
+  });
+  const clientUser = await prisma.user.upsert({
+    where: { email: "client@demo.local" },
+    update: {},
+    create: { email: "client@demo.local", name: "Demo Client User" },
   });
 
-  await prisma.subAccountMembership.upsert({
-    where: {
-      subAccountId_userId: { subAccountId: subAccount.id, userId: owner.id },
-    },
-    update: {},
-    create: {
-      subAccountId: subAccount.id,
-      userId: owner.id,
-      role: "ADMIN",
-    },
-  });
+  const demoMemberships = [
+    { user: owner, orgRole: "OWNER" as const, subRole: "ADMIN" as const },
+    { user: admin, orgRole: "ADMIN" as const, subRole: "ADMIN" as const },
+    { user: agent, orgRole: "AGENT" as const, subRole: "AGENT" as const },
+    { user: clientUser, orgRole: null, subRole: "CLIENT_USER" as const },
+  ];
+
+  for (const membership of demoMemberships) {
+    if (membership.orgRole) {
+      await prisma.orgMembership.upsert({
+        where: {
+          orgId_userId: { orgId: org.id, userId: membership.user.id },
+        },
+        update: { role: membership.orgRole, status: "ACTIVE" },
+        create: {
+          orgId: org.id,
+          userId: membership.user.id,
+          role: membership.orgRole,
+        },
+      });
+    }
+    await prisma.subAccountMembership.upsert({
+      where: {
+        subAccountId_userId: {
+          subAccountId: subAccount.id,
+          userId: membership.user.id,
+        },
+      },
+      update: { role: membership.subRole, status: "ACTIVE" },
+      create: {
+        subAccountId: subAccount.id,
+        userId: membership.user.id,
+        role: membership.subRole,
+      },
+    });
+  }
 
   const tag = await prisma.tag.upsert({
     where: { subAccountId_name: { subAccountId: subAccount.id, name: "demo" } },
