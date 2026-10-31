@@ -1,22 +1,91 @@
-export default function Home() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-6 font-sans dark:bg-zinc-950">
-      <main className="flex w-full max-w-xl flex-col items-center gap-6 text-center">
-        <span className="rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium tracking-wide text-zinc-600 uppercase dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
-          Foundation build
-        </span>
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Atryn
-        </h1>
-        <p className="text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-          Capture more leads, follow up automatically, book more appointments,
-          and prove revenue results.
-        </p>
-        <p className="text-sm text-zinc-500 dark:text-zinc-500">
-          Phase 0 complete: Next.js 16, Prisma 7, Postgres schema, Docker
-          Compose, and seed data. Auth lands in Phase 1.
-        </p>
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "../../auth";
+import { createOrganizationFromForm } from "@/server/actions/tenancy";
+import { selectActiveSubAccount } from "@/server/tenant/active-sub-account";
+import { listAccessibleSubAccounts } from "@/server/tenant/sub-accounts";
+
+export const instant = false;
+
+const activeSubAccountCookie = "atryn-active-sub-account";
+
+export default async function HomePage() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f6f7fb] px-6">
+        <section className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm sm:p-12">
+          <p className="text-sm font-bold tracking-[0.18em] text-indigo-600">ATRYN</p>
+          <h1 className="mt-5 text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
+            Grow your business, all in one place.
+          </h1>
+          <p className="mt-5 max-w-xl text-lg leading-8 text-slate-600">
+            Capture leads, follow up with customers, and keep your team on the same page.
+          </p>
+          <Link
+            href="/login"
+            className="mt-8 inline-flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            Sign in to Atryn
+          </Link>
+        </section>
       </main>
-    </div>
+    );
+  }
+
+  const subAccounts = await listAccessibleSubAccounts(session.user.id);
+  if (subAccounts.length === 0) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f6f7fb] px-6 py-12">
+        <section className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm sm:p-10">
+          <p className="text-sm font-bold tracking-[0.18em] text-indigo-600">ATRYN</p>
+          <h1 className="mt-5 text-3xl font-semibold tracking-tight text-slate-950">
+            Set up your workspace
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Create an organization and its first client workspace to get started.
+          </p>
+          <form action={createOrganizationFromForm} className="mt-8 grid gap-5">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Organization name
+              <input
+                name="organizationName"
+                required
+                minLength={2}
+                maxLength={120}
+                className="min-h-11 rounded-xl border border-slate-300 px-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              First client workspace
+              <input
+                name="subAccountName"
+                required
+                minLength={2}
+                maxLength={120}
+                className="min-h-11 rounded-xl border border-slate-300 px-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              />
+            </label>
+            <button
+              type="submit"
+              className="min-h-11 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
+              Create workspace
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
+  const cookieStore = await cookies();
+  const activeSubAccount = selectActiveSubAccount(
+    subAccounts,
+    cookieStore.get(activeSubAccountCookie)?.value,
   );
+  if (!activeSubAccount) {
+    throw new Error("An accessible workspace could not be selected.");
+  }
+  redirect(`/s/${activeSubAccount.id}/dashboard`);
 }

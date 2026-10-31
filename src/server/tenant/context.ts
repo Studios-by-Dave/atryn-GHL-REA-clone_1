@@ -13,6 +13,7 @@ export async function requireAuthenticatedUser() {
   return {
     id: session.user.id,
     email: session.user.email?.trim().toLowerCase() ?? null,
+    name: session.user.name?.trim() || null,
   };
 }
 
