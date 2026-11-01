@@ -43,7 +43,7 @@ type NavigationItem = {
 
 const navigation: NavigationItem[] = [
   { label: "Overview", icon: LayoutDashboard, href: "dashboard" },
-  { label: "Contacts", icon: ContactRound },
+  { label: "Contacts", icon: ContactRound, href: "contacts" },
   { label: "Conversations", icon: MessageSquare },
   { label: "Opportunities", icon: Workflow },
   { label: "Appointments", icon: CalendarDays },
