@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { auth } from "../../auth";
 import { createOrganizationFromForm } from "@/server/actions/tenancy";
@@ -11,6 +12,7 @@ export const instant = false;
 const activeSubAccountCookie = "atryn-active-sub-account";
 
 export default async function HomePage() {
+  await connection();
   const session = await auth();
   if (!session?.user?.id) {
     return (
