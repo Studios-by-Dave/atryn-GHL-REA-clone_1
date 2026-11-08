@@ -25,14 +25,21 @@ _Last updated: 2026-11-08_
 
 ## Current state
 
-- **Done:** T1 foundation (`dec8eaf`) · T2 auth/tenancy/RBAC (`714553c`) · T3 app shell + sub-account switcher (`e61bcea`) · T4 contacts CRM (`fd7e773` server layer, `13f5c0d` pages/forms/nav, `7e9ef74` full UI).
+- **Done:** T1 foundation (`dec8eaf`) · T2 auth/tenancy/RBAC (`714553c`) · T3 app shell + sub-account switcher (`e61bcea`) · T4 contacts CRM (`fd7e773` server layer, `13f5c0d` pages/forms/nav, `7e9ef74` full UI) · T5 pipelines & opportunities (`e5edb2b` — awaiting user QA).
 - **T4 verified live 2026-11-08:** user QA passed — filters/sort, create, tags, notes, archive/restore + flash banners, bulk tag bar, CSV import with merged/skipped counts.
-- **Next: T5 — Pipelines & opportunities** (see roadmap in `docs/INITIAL_DELIVERABLE.md`): Pipeline/PipelineStage/Opportunity/OpportunityStageHistory repos + services, `features/pipelines` board with dnd-kit drag, stage history rows, won/lost terminal stages, CLIENT_USER limited to assigned opps; pause for QA after gates.
+- **T5 (2026-11-08, unverified):** Pipelines list page (create/rename/delete), board page with dnd-kit drag between stage columns (optimistic move + server action `moveOpportunityAction`), stage history rows on create+move, won/lost terminal semantics (status + wonAt/lostAt sticky once set), stage editor (add/edit/delete, delete guarded when opps present), opportunity create form, board filters (assignee/status/min value/close-before), CLIENT_USER board read locked to assigned opps, `workflow event` stub `OPPORTUNITY_STAGE_CHANGED` in `src/server/events/bus.ts`, schemas test. Gates green: lint, 89 tests, tsc, build.
+  - QA plan (from roadmap): create pipeline → drag 5 opps across stages → verify history rows via SQL → reload board → filter by assignee.
 - **Gotchas found while finishing T4:** `"use server"` files may only export async functions — `ContactActionState`/`initialContactState` live in `src/features/contacts/action-state.ts`; `hasPermission` is imported from `@/server/rbac/permissions`, not `guards`.
 - Roadmap, full schema, access matrix: `docs/INITIAL_DELIVERABLE.md`.
 - Dev DB containers: `atryn-pg`, `atryn-redis`, `atryn-mailpit` (running; `docker start` after reboot — no compose plugin). Dev log: `/tmp/opencode/atryn-dev4.log`.
 
-## T4 design decisions (locked, 2026-10-31)
+- **`z.coerce.number()` turns `undefined` into `NaN`** and then fails validation — add `.optional().transform(v => v ?? <default>)` or a real default when a numeric field may be absent.
+- **`satisfies Prisma.XSelect`**: the select object must be flat (`{ id: true, ... }`), and `GetPayload` args take `{ select: typeof flatObj }` — nesting a `select:` wrapper inside breaks every include that reuses it.
+**T5 notes (locked, 2026-11-08):**
+- Drag-and-drop is optimistic-only: the board component mutates local card state first, then calls `moveOpportunityAction`; on error it reverts and shows the message. Plain `revalidatePath` handles persistence.
+- Terminal (won/lost) stages are sticky: once `status` is `WON`/`LOST`, later moves to non-terminal stages never clear it; `wonAt`/`lostAt` are set only once.
+- The board filters form and the update-opportunity edit form intentionally do NOT change stage — only drags write history rows (edit form resends current `stageId` for ownership validation).
+- Stage editor lives below the board on the pipeline page (add/edit/delete; delete is refused while opportunities sit on the stage).
 
 - **CLIENT_USER can add notes but not edit contacts** — `addNoteAction` gates on `contacts.read`, mutations on `contacts.write`.
 - Changing email/phone to one held by *another* contact → `ContactValidationError`, no silent merge (merge only happens on create/import).
