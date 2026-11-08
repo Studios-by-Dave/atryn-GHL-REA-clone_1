@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Project state & session handoff
 
-_Last updated: 2026-10-31_
+_Last updated: 2026-11-08_
 
 ## ⏰ Reminders for next session
 
@@ -25,27 +25,14 @@ _Last updated: 2026-10-31_
 
 ## Current state
 
-- **Done:** T1 foundation (`dec8eaf`) · T2 auth/tenancy/RBAC (`714553c`) · T3 app shell + sub-account switcher (`e61bcea`).
-- **T2/T3 verified live 2026-10-31:** all 3 migrations already applied to dev DB; all four `@demo.local` users sign in via magic link (dev bypass logs URL in dev server console); dashboard 200 per role; cross-tenant workspace → 403 forbidden UI; unauthenticated `/s/*` → 307 to `/login`; invalid UUID → 404.
-- **In progress (T4 — Contacts CRM), uncommitted WIP:**
-  - ✅ `src/lib/normalize.ts` (+test) — email/phone → dedupe keys (E.164-ish phone)
-  - ✅ `src/lib/csv.ts` (+test) — CSV parse with quotes, header aliases, full-name split
-  - ✅ `src/features/contacts/schemas.ts` — Zod: contact input, list query, `parseCustomFieldValue` by type (NUMBER/CURRENCY/DATE/EMAIL/SELECT/MULTI_SELECT/CHECKBOX)
-  - ✅ `src/server/repositories/contacts.ts` — tenant-scoped: list (filters/sort/pagination, PAGE_SIZE=25), detail (notes/customValues/_count), duplicate lookup, upsert tag, add/remove tag, notes, custom fields, owners, sources
-  - ✅ `src/server/services/contacts.ts` + `contact-dedupe.ts` (+test) — **dedupe merge semantics**: create checks `emailNormalized`/`phoneNormalized` unique per sub-account; on match it *merges* (fills blanks, never clears known fields, **preserves original `source`** for attribution) and audits `contact.merged` instead of inserting
-  - ✅ `src/features/contacts/actions.ts` — create/update (useActionState, typed `{error}` state), archive/restore, addNote, bulkTag, applyTag, importContacts (cap 500)
-  - Gates at WIP point: typecheck ✅ 77 tests ✅ lint ✅
-- **Next (T4 finish):**
-  1. `src/features/contacts/queries.ts` — read-model wrappers used by pages
-  2. Pages: `/s/[subAccountId]/contacts` (list + filters + pagination + bulk tag bar), `/contacts/[contactId]` (detail, notes, tags, timeline placeholders, archive/restore), `/contacts/import` (paste CSV)
-  3. Components: contact form (client, useActionState), note form, bulk-select table, filter bar
-  4. Wire "Contacts" nav item in `src/components/app-shell.tsx` (currently a disabled "Soon" button) — add `href: "contacts"`
-  5. `export const instant = false` on new pages (searchParams-driven, consistent with T3 pages)
-  6. Gates + `next build` → commit as `T4: contacts CRM — CRUD, dedupe, tags, import` → pause for user QA
+- **Done:** T1 foundation (`dec8eaf`) · T2 auth/tenancy/RBAC (`714553c`) · T3 app shell + sub-account switcher (`e61bcea`) · T4 contacts CRM (`fd7e773` server layer, `13f5c0d` pages/forms/nav, `7e9ef74` full UI).
+- **T4 verified live 2026-11-08:** user QA passed — filters/sort, create, tags, notes, archive/restore + flash banners, bulk tag bar, CSV import with merged/skipped counts.
+- **Next: T5 — Pipelines & opportunities** (see roadmap in `docs/INITIAL_DELIVERABLE.md`): Pipeline/PipelineStage/Opportunity/OpportunityStageHistory repos + services, `features/pipelines` board with dnd-kit drag, stage history rows, won/lost terminal stages, CLIENT_USER limited to assigned opps; pause for QA after gates.
+- **Gotchas found while finishing T4:** `"use server"` files may only export async functions — `ContactActionState`/`initialContactState` live in `src/features/contacts/action-state.ts`; `hasPermission` is imported from `@/server/rbac/permissions`, not `guards`.
 - Roadmap, full schema, access matrix: `docs/INITIAL_DELIVERABLE.md`.
 - Dev DB containers: `atryn-pg`, `atryn-redis`, `atryn-mailpit` (running; `docker start` after reboot — no compose plugin). Dev log: `/tmp/opencode/atryn-dev4.log`.
 
-## T4 design decisions (locked this session)
+## T4 design decisions (locked, 2026-10-31)
 
 - **CLIENT_USER can add notes but not edit contacts** — `addNoteAction` gates on `contacts.read`, mutations on `contacts.write`.
 - Changing email/phone to one held by *another* contact → `ContactValidationError`, no silent merge (merge only happens on create/import).
