@@ -33,14 +33,15 @@ _Last updated: 2026-11-08_
 - Roadmap, full schema, access matrix: `docs/INITIAL_DELIVERABLE.md`.
 - Dev DB containers: `atryn-pg`, `atryn-redis`, `atryn-mailpit` (running; `docker start` after reboot — no compose plugin). Dev log: `/tmp/opencode/atryn-dev4.log`.
 
-- **`z.coerce.number()` turns `undefined` into `NaN`** and then fails validation — add `.optional().transform(v => v ?? <default>)` or a real default when a numeric field may be absent.
-- **`satisfies Prisma.XSelect`**: the select object must be flat (`{ id: true, ... }`), and `GetPayload` args take `{ select: typeof flatObj }` — nesting a `select:` wrapper inside breaks every include that reuses it.
-**T5 notes (locked, 2026-11-08):**
+## T4/T5 design decisions (locked, 2026-10-31 / 2026-11-08)
+
+## T5 (locked, 2026-11-08)
 - Drag-and-drop is optimistic-only: the board component mutates local card state first, then calls `moveOpportunityAction`; on error it reverts and shows the message. Plain `revalidatePath` handles persistence.
 - Terminal (won/lost) stages are sticky: once `status` is `WON`/`LOST`, later moves to non-terminal stages never clear it; `wonAt`/`lostAt` are set only once.
 - The board filters form and the update-opportunity edit form intentionally do NOT change stage — only drags write history rows (edit form resends current `stageId` for ownership validation).
 - Stage editor lives below the board on the pipeline page (add/edit/delete; delete is refused while opportunities sit on the stage).
 
+## T4 (locked, 2026-10-31)
 - **CLIENT_USER can add notes but not edit contacts** — `addNoteAction` gates on `contacts.read`, mutations on `contacts.write`.
 - Changing email/phone to one held by *another* contact → `ContactValidationError`, no silent merge (merge only happens on create/import).
 - Custom field values arrive as `custom.<key>` form names; `resolveCustomFieldValues` validates against `CustomField` rows server-side and ignores unknown keys.
@@ -59,3 +60,5 @@ _Last updated: 2026-11-08_
 - **Dependency pins:** `prisma` pinned `^7` (v8 RC pulls a broken peer chain), `vitest` pinned `5.0.4` for the same reason; `@types/node` bumped to `^24`.
 - **Typecheck order:** run `next build` at least once before `tsc --noEmit` passes — Next 16 typed routes generate the `LayoutProps` global into `.next/types`.
 - **Shell:** the bash tool's default cwd still points at the pre-rename path (`GoHighLevel REA Clone`); always pass `workdir` explicitly.
+- **`z.coerce.number()` turns `undefined` into `NaN`** and then fails validation — use `.optional().transform(v => v ?? <default>)` when a numeric field may be absent.
+- **`satisfies Prisma.XSelect`**: the select object must be flat (`{ id: true, ... }`), and `GetPayload` args take `{ select: typeof flatObj }` — nesting a `select:` wrapper inside breaks every include that reuses it.
