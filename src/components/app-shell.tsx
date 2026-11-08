@@ -45,7 +45,7 @@ const navigation: NavigationItem[] = [
   { label: "Overview", icon: LayoutDashboard, href: "dashboard" },
   { label: "Contacts", icon: ContactRound, href: "contacts" },
   { label: "Conversations", icon: MessageSquare },
-  { label: "Opportunities", icon: Workflow },
+  { label: "Opportunities", icon: Workflow, href: "pipelines" },
   { label: "Appointments", icon: CalendarDays },
   { label: "Automation", icon: Workflow },
   { label: "Reporting", icon: BarChart3 },
