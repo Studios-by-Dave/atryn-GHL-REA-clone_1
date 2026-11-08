@@ -4,11 +4,12 @@ import { useActionState } from "react";
 import { createPipelineAction } from "@/features/pipelines/actions";
 import { initialContactState } from "@/features/contacts/action-state";
 
-export function PipelineCreateForm() {
+export function PipelineCreateForm({ subAccountId }: { subAccountId: string }) {
   const [state, formAction, pending] = useActionState(createPipelineAction, initialContactState);
 
   return (
     <form action={formAction} className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-4">
+      <input type="hidden" name="subAccountId" value={subAccountId} />
       <input
         name="name"
         required

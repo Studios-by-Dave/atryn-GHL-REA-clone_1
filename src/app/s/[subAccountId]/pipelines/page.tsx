@@ -33,7 +33,7 @@ export default async function PipelinesPage({ params }: PageProps) {
         </p>
       </header>
 
-      {canWrite ? <PipelineCreateForm /> : null}
+      {canWrite ? <PipelineCreateForm subAccountId={subAccountId} /> : null}
 
       {pipelines.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
