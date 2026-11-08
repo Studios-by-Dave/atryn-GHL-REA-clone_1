@@ -3,13 +3,16 @@
 import { useActionState } from "react";
 import {
   createContactAction,
-  initialContactState,
   updateContactAction,
 } from "@/features/contacts/actions";
+import { initialContactState } from "@/features/contacts/action-state";
+
+type Owner = { id: string; name: string | null; email: string };
 
 type Props = {
   subAccountId: string;
   contactId?: string;
+  owners?: Owner[];
   defaults?: {
     firstName?: string;
     lastName?: string;
@@ -21,7 +24,7 @@ type Props = {
   };
 };
 
-export function ContactForm({ subAccountId, contactId, defaults = {} }: Props) {
+export function ContactForm({ subAccountId, contactId, owners = [], defaults = {} }: Props) {
   const action = contactId ? updateContactAction : createContactAction;
   const [state, formAction, pending] = useActionState(action, initialContactState);
 
@@ -36,6 +39,18 @@ export function ContactForm({ subAccountId, contactId, defaults = {} }: Props) {
         <input name="phone" defaultValue={defaults.phone} placeholder="Phone" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
         <input name="company" defaultValue={defaults.company} placeholder="Company" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
         <input name="source" defaultValue={defaults.source} placeholder="Source" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        <select
+          name="ownerUserId"
+          defaultValue={defaults.ownerUserId ?? ""}
+          className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+        >
+          <option value="">Unassigned</option>
+          {owners.map((owner) => (
+            <option key={owner.id} value={owner.id}>
+              {owner.name ?? owner.email}
+            </option>
+          ))}
+        </select>
       </div>
       {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
       <button

@@ -16,6 +16,7 @@ import {
   noteInputSchema,
   tagInputSchema,
 } from "@/features/contacts/schemas";
+import type { ContactActionState } from "@/features/contacts/action-state";
 import {
   archiveContact,
   ContactValidationError,
@@ -27,12 +28,6 @@ import {
   tagContacts,
   updateContactDetails,
 } from "@/server/services/contacts";
-
-export type ContactActionState = {
-  error: string | null;
-};
-
-export const initialContactState: ContactActionState = { error: null };
 
 function readString(formData: FormData, name: string): string {
   const value = formData.get(name);

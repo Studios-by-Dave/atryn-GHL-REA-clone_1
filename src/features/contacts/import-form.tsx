@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { importContactsAction, initialContactState } from "@/features/contacts/actions";
+import { importContactsAction } from "@/features/contacts/actions";
+import { initialContactState } from "@/features/contacts/action-state";
 
 export function ImportContactsForm({ subAccountId }: { subAccountId: string }) {
   const [state, formAction, pending] = useActionState(importContactsAction, initialContactState);
