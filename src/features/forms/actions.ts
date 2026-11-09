@@ -19,6 +19,7 @@ import {
   createForm,
   deleteForm,
   editField,
+  moveField,
   removeField,
   reorderFields,
   setFormStatus,
@@ -220,6 +221,25 @@ export async function deleteFieldAction(formData: FormData): Promise<void> {
 
   await removeField(context, uuidFromForm(formData, "fieldId"));
   revalidatePath(formsPath(subAccountId, formId));
+}
+
+/**
+ * Plain form action (no error surface needed): "already at edge" is a no-op.
+ */
+export async function moveFieldAction(formData: FormData): Promise<void> {
+  const { subAccountId, context } = await tenantFromForm(formData);
+  requirePermission(context, "forms.write");
+  const formId = uuidFromForm(formData, "formId");
+
+  const fieldId = uuidFromForm(formData, "fieldId");
+  const direction =
+    readString(formData, "direction") === "down" ? ("down" as const) : ("up" as const);
+  try {
+    await moveField(context, fieldId, direction);
+    revalidatePath(formsPath(subAccountId, formId));
+  } catch {
+    // leave the page as-is on invalid move; validation errors shouldn't 500
+  }
 }
 
 /**

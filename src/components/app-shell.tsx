@@ -8,6 +8,7 @@ import {
   BarChart3,
   CalendarDays,
   ChevronDown,
+  ClipboardList,
   ContactRound,
   LayoutDashboard,
   LifeBuoy,
@@ -44,6 +45,7 @@ type NavigationItem = {
 const navigation: NavigationItem[] = [
   { label: "Overview", icon: LayoutDashboard, href: "dashboard" },
   { label: "Contacts", icon: ContactRound, href: "contacts" },
+  { label: "Forms", icon: ClipboardList, href: "forms" },
   { label: "Conversations", icon: MessageSquare },
   { label: "Opportunities", icon: Workflow, href: "pipelines" },
   { label: "Appointments", icon: CalendarDays },

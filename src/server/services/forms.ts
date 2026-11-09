@@ -340,6 +340,51 @@ export async function getForms(context: TenantContext) {
   return listForms(context);
 }
 
+/**
+ * Swaps a field one slot up/down by re-writing positions in list order.
+ */
+export async function moveField(
+  context: TenantContext,
+  fieldId: string,
+  direction: "up" | "down",
+) {
+  return prisma.$transaction(async (tx) => {
+    const field = await tx.formField.findFirst({
+      where: { id: fieldId, form: { subAccountId: context.subAccountId } },
+      select: { id: true, formId: true },
+    });
+    if (!field) {
+      throw new FormValidationError("Field not found.");
+    }
+    const form = await loadForm(context, field.formId, tx);
+    assertEditable(form);
+    const ordered = [...form.fields].sort((a, b) => a.position - b.position);
+    const index = ordered.findIndex((entry) => entry.id === fieldId);
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (swapWith < 0 || swapWith >= ordered.length) {
+      return null; // already at edge — nothing to do (not an error)
+    }
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(swapWith, 0, moved);
+    await reorderFormFields(
+      field.formId,
+      reordered.map((entry) => entry.id),
+      tx,
+    );
+    await writeAuditLog(tx, {
+      orgId: context.orgId,
+      subAccountId: context.subAccountId,
+      userId: context.userId,
+      action: "form.field.reorder",
+      entityType: "Form",
+      entityId: field.formId,
+      metadata: { fieldId },
+    });
+    return true;
+  });
+}
+
 export async function getFormDetail(context: TenantContext, formId: string) {
   const form = await findForm(context, formId);
   if (!form || !hasPermission(context.role, "forms.read")) {
