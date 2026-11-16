@@ -65,7 +65,7 @@ export function AppShell({
   const displayName = userName.includes("@") ? userName : "Your account";
 
   return (
-    <div className="min-h-screen bg-brand-dark text-white">
+    <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
       {mobileNavOpen ? (
         <button
           type="button"
@@ -75,7 +75,7 @@ export function AppShell({
         />
       ) : null}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[264px] flex-col border-r border-white/10 bg-brand-blue/40 backdrop-blur transition-transform lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[264px] flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 ${
           mobileNavOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
