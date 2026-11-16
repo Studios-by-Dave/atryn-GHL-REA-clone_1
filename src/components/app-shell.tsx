@@ -80,7 +80,7 @@ export function AppShell({
         }`}
       >
         <div className="flex h-[72px] items-center gap-3 border-b border-slate-100 px-6">
-          <span className="grid size-9 place-items-center rounded-xl bg-brand-blue text-sm font-bold text-white">
+          <span className="grid size-9 place-items-center rounded-xl border-4 border-white bg-brand-blue text-sm font-bold text-white">
             A
           </span>
           <span className="text-lg font-bold tracking-tight text-slate-950">Atryn</span>
