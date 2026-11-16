@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/server/db/client";
+import { runWorkflow } from "@/server/services/workflow-runner";
 
 export type WorkflowEventType = "OPPORTUNITY_STAGE_CHANGED";
 
@@ -30,7 +31,7 @@ export async function publishWorkflowEvent(event: WorkflowEvent): Promise<void> 
       if (!v) continue;
       const matches = v.triggers.some((t) => String(t.type) === event.type);
       if (!matches) continue;
-      await prisma.workflowRun.create({
+      const run = await prisma.workflowRun.create({
         data: {
           subAccountId: event.subAccountId,
           workflowId: w.id,
@@ -39,6 +40,8 @@ export async function publishWorkflowEvent(event: WorkflowEvent): Promise<void> 
           status: "PENDING",
         },
       });
+      // fire-and-forget run
+      void runWorkflow(run.id);
     }
   } catch (e) {
     console.error("[workflow dispatch] failed", e);
