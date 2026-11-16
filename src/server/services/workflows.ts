@@ -2,6 +2,8 @@ import "server-only";
 import { hasPermission } from "@/server/rbac/permissions";
 import type { TenantContext } from "@/server/rbac/guards";
 import * as repo from "@/server/repositories/workflows";
+import { prisma } from "@/server/db/client";
+import { runWorkflow } from "@/server/services/workflow-runner";
 
 export async function listWorkflows(context: TenantContext) {
   if (!hasPermission(context.role, "workflows.read")) return null;
@@ -41,4 +43,24 @@ export async function addTrigger(context: TenantContext, versionId: string, type
 export async function addAction(context: TenantContext, versionId: string, type: string) {
   if (!hasPermission(context.role, "workflows.manage")) throw new Error("forbidden");
   return repo.addAction(context, versionId, type);
+}
+
+export async function testRunWorkflow(context: TenantContext, workflowId: string, contactId: string | null) {
+  if (!hasPermission(context.role, "workflows.manage")) throw new Error("forbidden");
+  const w = await prisma.workflow.findFirst({ where: { id: workflowId, subAccountId: context.subAccountId } });
+  if (!w || !w.currentVersionId) throw new Error("no published version");
+  const run = await prisma.workflowRun.create({
+    data: {
+      subAccountId: context.subAccountId,
+      workflowId: w.id,
+      workflowVersionId: w.currentVersionId,
+      contactId: contactId ?? undefined,
+      triggerEvent: { type: "MANUAL_TEST", contactId } as any,
+      status: "PENDING",
+      isTestRun: true,
+      startedByUserId: context.userId,
+    },
+  });
+  void runWorkflow(run.id);
+  return run;
 }
