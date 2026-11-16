@@ -72,7 +72,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         {cards.map(({ label, value, caption, icon: Icon, tint }) => (
           <article
             key={label}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+            className="rounded-2xl border border-slate-300 bg-white p-5 shadow sm:p-6"
           >
             <div className="flex items-start justify-between">
               <div>
@@ -89,7 +89,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-        <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <article className="rounded-2xl border border-slate-300 bg-white p-6 shadow">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold text-slate-950">Get started</h2>
@@ -119,7 +119,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           </div>
         </article>
 
-        <article className="flex min-h-60 flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <article className="flex min-h-60 flex-col rounded-2xl border border-slate-300 bg-white p-6 shadow">
           <h2 className="font-semibold text-slate-950">Recent activity</h2>
           <p className="mt-1 text-sm text-slate-500">Updates from this workspace will appear here.</p>
           <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
