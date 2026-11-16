@@ -65,7 +65,7 @@ export function AppShell({
   const displayName = userName.includes("@") ? userName : "Your account";
 
   return (
-    <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
+    <div className="min-h-screen bg-[#e2e6ee] text-slate-900">
       {mobileNavOpen ? (
         <button
           type="button"
