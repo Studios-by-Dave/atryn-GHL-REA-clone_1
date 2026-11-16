@@ -80,7 +80,7 @@ export function AppShell({
         }`}
       >
         <div className="flex h-[72px] items-center gap-3 border-b border-slate-100 px-6">
-          <span className="grid size-9 place-items-center rounded-xl bg-indigo-600 text-sm font-bold text-white">
+          <span className="grid size-9 place-items-center rounded-xl bg-brand-blue text-sm font-bold text-white">
             A
           </span>
           <span className="text-lg font-bold tracking-tight text-slate-950">Atryn</span>
@@ -121,7 +121,7 @@ export function AppShell({
             {subAccounts.length > 1 ? (
               <button
                 type="submit"
-                className="mt-3 min-h-9 w-full rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                className="mt-3 min-h-9 w-full rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue"
               >
                 Switch workspace
               </button>
@@ -141,7 +141,7 @@ export function AppShell({
                 onClick={() => setMobileNavOpen(false)}
                 className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${
                   isActive
-                    ? "bg-indigo-50 text-indigo-700"
+                    ? "bg-brand-blue/10 text-brand-blue"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
                 }`}
               >
@@ -209,14 +209,14 @@ export function AppShell({
             </div>
             <div
               title={displayName}
-              className="grid size-9 place-items-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700"
+              className="grid size-9 place-items-center rounded-full bg-brand-blue/20 text-xs font-bold text-brand-blue"
             >
               {displayName.slice(0, 1).toUpperCase()}
             </div>
             <button
               type="button"
               onClick={() => void signOut({ redirectTo: "/login" })}
-              className="min-h-10 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="min-h-10 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue"
             >
               Sign out
             </button>
