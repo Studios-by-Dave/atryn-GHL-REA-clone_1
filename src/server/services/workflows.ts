@@ -45,6 +45,11 @@ export async function addAction(context: TenantContext, versionId: string, type:
   return repo.addAction(context, versionId, type);
 }
 
+export async function listWorkflowRuns(context: TenantContext, workflowId: string) {
+  if (!hasPermission(context.role, "workflows.read")) return null;
+  return repo.listWorkflowRuns(context, workflowId);
+}
+
 export async function testRunWorkflow(context: TenantContext, workflowId: string, contactId: string | null) {
   if (!hasPermission(context.role, "workflows.manage")) throw new Error("forbidden");
   const w = await prisma.workflow.findFirst({ where: { id: workflowId, subAccountId: context.subAccountId } });

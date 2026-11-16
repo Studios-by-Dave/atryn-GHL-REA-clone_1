@@ -56,6 +56,17 @@ export async function addAction(context: TenantContext, versionId: string, type:
   return prisma.workflowAction.create({ data: { workflowVersionId: versionId, type: type as any, position: pos } });
 }
 
+export async function listWorkflowRuns(context: TenantContext, workflowId: string) {
+  const w = await prisma.workflow.findFirst({ where: { id: workflowId, subAccountId: context.subAccountId } });
+  if (!w) return [];
+  return prisma.workflowRun.findMany({
+    where: { workflowId, subAccountId: context.subAccountId },
+    orderBy: { startedAt: "desc" },
+    take: 50,
+    include: { steps: { orderBy: { position: "asc" } } },
+  });
+}
+
 export async function publishVersion(context: TenantContext, workflowId: string, versionId: string) {
   const w = await prisma.workflow.findFirst({ where: { id: workflowId, subAccountId: context.subAccountId } });
   if (!w) return null;

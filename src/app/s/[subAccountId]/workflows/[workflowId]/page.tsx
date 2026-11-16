@@ -1,5 +1,5 @@
 import { requireTenantContext } from "@/server/tenant/context";
-import { findWorkflow } from "@/server/services/workflows";
+import { findWorkflow, listWorkflowRuns } from "@/server/services/workflows";
 import { createVersionAction, publishVersionAction, addTriggerAction, addActionAction } from "@/features/workflows/actions";
 
 export default async function WorkflowDetailPage({
@@ -11,6 +11,7 @@ export default async function WorkflowDetailPage({
   const ctx = await requireTenantContext(subAccountId);
   const workflow = await findWorkflow(ctx, workflowId);
   if (!workflow) return <main className="p-6">Not found.</main>;
+  const runs = (await listWorkflowRuns(ctx, workflowId)) ?? [];
 
   return (
     <main className="p-6">
@@ -46,6 +47,29 @@ export default async function WorkflowDetailPage({
             </form>
           </li>
         ))}
+      </ul>
+
+      <h2 className="mt-6 text-xl font-semibold">Runs</h2>
+      <ul className="mt-2 space-y-2">
+        {runs.map((r: any) => (
+          <li key={r.id} className="rounded border p-3">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{r.status}</span>
+              <span className="text-sm text-gray-500">{new Date(r.startedAt).toLocaleString()}</span>
+            </div>
+            {r.isTestRun ? <span className="text-xs text-blue-600">test run</span> : null}
+            {r.error ? <p className="text-sm text-red-600">{r.error}</p> : null}
+            <ul className="mt-2 space-y-1">
+              {r.steps.map((s: any) => (
+                <li key={s.id} className="text-sm">
+                  #{s.position} {s.actionType ?? "—"} — {s.status}
+                  {s.durationMs != null ? ` (${s.durationMs}ms)` : ""}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+        {runs.length === 0 ? <li className="text-sm text-gray-500">No runs yet.</li> : null}
       </ul>
     </main>
   );
