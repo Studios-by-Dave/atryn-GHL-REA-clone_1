@@ -79,5 +79,18 @@ export async function POST(
     utmTerm: data.utmTerm ?? null,
   });
 
+  try {
+    const { publishWorkflowEvent } = await import("@/server/events/bus");
+    await publishWorkflowEvent({
+      type: "FORM_SUBMITTED",
+      orgId: subAccount.orgId,
+      subAccountId: form.subAccountId,
+      entityId: form.id,
+      metadata: { contactId, formId: form.id },
+    });
+  } catch (e) {
+    console.error("[workflow] form_submitted dispatch failed", e);
+  }
+
   return NextResponse.json({ ok: true });
 }

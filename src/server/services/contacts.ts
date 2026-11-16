@@ -59,7 +59,7 @@ export async function createOrMergeContact(
 ): Promise<{ contact: ContactDetail; created: boolean }> {
   const identity = buildIdentity(input);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const duplicate = await findDuplicateContact(context, identity, tx);
 
     if (duplicate) {
@@ -114,6 +114,22 @@ export async function createOrMergeContact(
     });
     return { contact, created: true };
   });
+  if (result.created) {
+    void (async () => {
+      try {
+        const { publishWorkflowEvent } = await import("@/server/events/bus");
+        await publishWorkflowEvent({
+          type: "CONTACT_CREATED",
+          orgId: context.orgId,
+          subAccountId: context.subAccountId,
+          entityId: result.contact.id,
+        });
+      } catch (e) {
+        console.error("[workflow] contact_created dispatch failed", e);
+      }
+    })();
+  }
+  return result;
 }
 
 export async function updateContactDetails(
@@ -235,7 +251,7 @@ export async function tagContacts(
   contactIds: string[],
   mode: "add" | "remove" = "add",
 ) {
-  return prisma.$transaction(async (tx) => {
+  const count = await prisma.$transaction(async (tx) => {
     const count =
       mode === "add"
         ? await addTagToContacts(context, tagId, contactIds, tx)
@@ -251,6 +267,29 @@ export async function tagContacts(
     });
     return count;
   });
+  if (mode === "add") {
+    void _dispatchTagAdded(context, tagId, contactIds);
+  }
+  return count;
+}
+
+// dispatch hook helper called after tx
+async function _dispatchTagAdded(context: TenantContext, tagId: string, contactIds: string[]) {
+  if (contactIds.length === 0) return;
+  try {
+    const { publishWorkflowEvent } = await import("@/server/events/bus");
+    for (const cid of contactIds) {
+      await publishWorkflowEvent({
+        type: "TAG_ADDED",
+        orgId: context.orgId,
+        subAccountId: context.subAccountId,
+        entityId: cid,
+        metadata: { tagId },
+      });
+    }
+  } catch (e) {
+    console.error("[workflow] tag_added dispatch failed", e);
+  }
 }
 
 export async function createTag(context: TenantContext, name: string) {

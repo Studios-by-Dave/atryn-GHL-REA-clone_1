@@ -2,7 +2,15 @@ import "server-only";
 import { prisma } from "@/server/db/client";
 import { runWorkflow } from "@/server/services/workflow-runner";
 
-export type WorkflowEventType = "OPPORTUNITY_STAGE_CHANGED";
+export type WorkflowEventType =
+  | "FORM_SUBMITTED"
+  | "CONTACT_CREATED"
+  | "TAG_ADDED"
+  | "APPOINTMENT_BOOKED"
+  | "APPOINTMENT_STATUS_CHANGED"
+  | "OPPORTUNITY_STAGE_CHANGED"
+  | "INBOUND_SMS"
+  | "INBOUND_EMAIL";
 
 export type WorkflowEvent = {
   type: WorkflowEventType;
