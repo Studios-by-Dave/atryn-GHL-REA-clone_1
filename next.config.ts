@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   experimental: {
     authInterrupts: true,
+    agentUpgrade: "security",
   },
   turbopack: {
     rules: {
