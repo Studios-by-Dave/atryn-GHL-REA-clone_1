@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/server/db/client";
 import type { TenantContext } from "@/server/rbac/guards";
+import type { WorkflowActionType, WorkflowTriggerType } from "@/generated/prisma/enums";
 
 export async function listWorkflows(context: TenantContext) {
   return prisma.workflow.findMany({
@@ -43,7 +44,7 @@ export async function addTrigger(context: TenantContext, versionId: string, type
   if (!v) return null;
   const w = await prisma.workflow.findFirst({ where: { id: v.workflowId, subAccountId: context.subAccountId } });
   if (!w) return null;
-  return prisma.workflowTrigger.create({ data: { workflowVersionId: versionId, type: type as any } });
+  return prisma.workflowTrigger.create({ data: { workflowVersionId: versionId, type: type as WorkflowTriggerType } });
 }
 
 export async function addAction(context: TenantContext, versionId: string, type: string) {
@@ -53,7 +54,7 @@ export async function addAction(context: TenantContext, versionId: string, type:
   if (!w) return null;
   const last = await prisma.workflowAction.findFirst({ where: { workflowVersionId: versionId }, orderBy: { position: "desc" } });
   const pos = (last?.position ?? 0) + 1;
-  return prisma.workflowAction.create({ data: { workflowVersionId: versionId, type: type as any, position: pos } });
+  return prisma.workflowAction.create({ data: { workflowVersionId: versionId, type: type as WorkflowActionType, position: pos } });
 }
 
 export async function listWorkflowRuns(context: TenantContext, workflowId: string) {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@/generated/prisma/client";
 import { getPublishedForm } from "@/server/services/forms";
 import { prisma } from "@/server/db/client";
 import { createOrMergeContact } from "@/server/services/contacts";
@@ -42,11 +43,12 @@ export async function POST(
     phone: data.phone ? String(data.phone) : null,
     company: data.company ? String(data.company) : null,
     source: `form:${form.publicId}`,
+    ownerUserId: null,
   };
 
   let contactId: string | null = null;
   try {
-    const { contact } = await createOrMergeContact(ctx, contactInput as any);
+    const { contact } = await createOrMergeContact(ctx, contactInput);
     contactId = contact.id;
     // apply autoTags
     if (form.autoTags?.length && contactId) {
@@ -67,7 +69,7 @@ export async function POST(
   await insertFormSubmission(ctx, {
     formId: form.id,
     contactId,
-    data: data as any,
+    data: data as Prisma.InputJsonValue,
     honeypotTriggered: false,
     ipHash,
     userAgent: req.headers.get("user-agent"),

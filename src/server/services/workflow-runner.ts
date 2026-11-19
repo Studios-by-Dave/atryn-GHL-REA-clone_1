@@ -1,27 +1,43 @@
 import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
+import type { WorkflowActionType } from "@/generated/prisma/enums";
+import type { TenantContext } from "@/server/rbac/guards";
+import type { ContactInput } from "@/features/contacts/schemas";
 import { prisma } from "@/server/db/client";
+
+type JsonObject = Record<string, unknown>;
 
 type Action = {
   id: string;
   position: number;
   type: string;
-  config: any;
+  config: JsonObject;
 };
 
-function delayMsFor(config: any): number {
-  const minutes = Number(config?.delayMinutes ?? config?.delay ?? 0);
-  const seconds = Number(config?.delaySeconds ?? 0);
+function asObject(value: unknown): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
+}
+
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return (value ?? {}) as Prisma.InputJsonValue;
+}
+
+function delayMsFor(config: JsonObject): number {
+  const minutes = Number(config.delayMinutes ?? config.delay ?? 0);
+  const seconds = Number(config.delaySeconds ?? 0);
   if (Number.isFinite(minutes) && minutes > 0) return minutes * 60 * 1000;
   if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
   return 0;
 }
 
-function evalCondition(config: any, ctx: Record<string, any>): boolean {
-  const c = config?.condition ?? config ?? {};
+function evalCondition(config: JsonObject, ctx: JsonObject): boolean {
+  const c = asObject(config.condition ?? config);
   const field = String(c.field ?? "");
   const op = String(c.operator ?? c.op ?? "eq");
   const expected = c.value;
-  const actual = field.split(".").reduce((o, k) => (o == null ? undefined : o[k]), ctx);
+  const actual = field
+    .split(".")
+    .reduce<unknown>((o, k) => (o == null ? undefined : (o as JsonObject)[k]), ctx);
   switch (op) {
     case "eq":
     case "equals":
@@ -46,10 +62,10 @@ function evalCondition(config: any, ctx: Record<string, any>): boolean {
   }
 }
 
-async function loadContext(run: any): Promise<Record<string, any>> {
-  const ctx: Record<string, any> = {
+async function loadContext(run: { triggerEvent: unknown; contactId: string | null }): Promise<JsonObject> {
+  const ctx: JsonObject = {
     triggerEvent: run.triggerEvent ?? {},
-    ...(run.triggerEvent?.metadata ?? {}),
+    ...asObject(asObject(run.triggerEvent).metadata),
   };
   if (run.contactId) {
     const contact = await prisma.contact.findUnique({ where: { id: run.contactId } });
@@ -58,59 +74,62 @@ async function loadContext(run: any): Promise<Record<string, any>> {
   return ctx;
 }
 
-async function executeOne(runId: string, a: Action, ctx: Record<string, any>, tenant: any) {
+async function executeOne(runId: string, a: Action, ctx: JsonObject, tenant: TenantContext | null) {
   const startedAt = new Date();
+  const contact = ctx.contact as { id?: string } | undefined;
+
   await prisma.workflowRunStep.upsert({
     where: { workflowRunId_position: { workflowRunId: runId, position: a.position } },
     create: {
       workflowRunId: runId,
       actionId: a.id,
       position: a.position,
-      actionType: a.type as any,
+      actionType: a.type as WorkflowActionType,
       status: "RUNNING",
       startedAt,
-      input: a.config ?? {},
+      input: toJson(a.config),
     },
     update: { status: "RUNNING", startedAt, error: null },
   });
 
-  const cfg = a.config ?? {};
-  let output: any = { ok: true };
+  const cfg = a.config;
+  let output: JsonObject = { ok: true };
 
   if (tenant) {
     const contactsSvc = await import("@/server/services/contacts");
     const pipelinesSvc = await import("@/server/services/pipelines");
     switch (a.type) {
       case "ADD_TAG": {
-        let tagId = cfg.tagId;
+        let tagId: string | null = typeof cfg.tagId === "string" ? cfg.tagId : null;
         if (!tagId && cfg.tagName) {
           const tag = await contactsSvc.createTag(tenant, String(cfg.tagName));
           tagId = tag.id;
         }
-        if (tagId && ctx.contact?.id) {
-          await contactsSvc.tagContacts(tenant, tagId, [ctx.contact.id], "add");
+        if (tagId && contact?.id) {
+          await contactsSvc.tagContacts(tenant, tagId, [contact.id], "add");
         }
         output = { tagId };
         break;
       }
       case "REMOVE_TAG": {
-        if (cfg.tagId && ctx.contact?.id) {
-          await contactsSvc.tagContacts(tenant, cfg.tagId, [ctx.contact.id], "remove");
+        const tagId = typeof cfg.tagId === "string" ? cfg.tagId : null;
+        if (tagId && contact?.id) {
+          await contactsSvc.tagContacts(tenant, tagId, [contact.id], "remove");
         }
-        output = { tagId: cfg.tagId };
+        output = { tagId };
         break;
       }
       case "UPDATE_CONTACT_FIELD": {
-        if (ctx.contact?.id && cfg.field) {
-          const input: any = {};
-          input[cfg.field] = cfg.value;
-          await contactsSvc.updateContactDetails(tenant, ctx.contact.id, input);
+        if (contact?.id && cfg.field) {
+          const input: Record<string, unknown> = {};
+          input[String(cfg.field)] = cfg.value;
+          await contactsSvc.updateContactDetails(tenant, contact.id, input as unknown as ContactInput);
         }
         output = { field: cfg.field, value: cfg.value };
         break;
       }
       case "MOVE_OPPORTUNITY": {
-        if (cfg.opportunityId && cfg.stageId) {
+        if (typeof cfg.opportunityId === "string" && typeof cfg.stageId === "string") {
           await pipelinesSvc.moveOpportunity(tenant, cfg.opportunityId, cfg.stageId);
         }
         output = { opportunityId: cfg.opportunityId, stageId: cfg.stageId };
@@ -134,7 +153,7 @@ async function executeOne(runId: string, a: Action, ctx: Record<string, any>, te
 
   await prisma.workflowRunStep.update({
     where: { workflowRunId_position: { workflowRunId: runId, position: a.position } },
-    data: { status: "SUCCESS", finishedAt: new Date(), durationMs: 10, output },
+    data: { status: "SUCCESS", finishedAt: new Date(), durationMs: 10, output: toJson(output) },
   });
 }
 
@@ -148,10 +167,10 @@ export async function runWorkflow(runId: string, fromPosition?: number) {
 
   await prisma.workflowRun.update({ where: { id: runId }, data: { status: "RUNNING" } });
 
-  const actions: Action[] = run.workflowVersion.actions as any;
+  const actions = run.workflowVersion.actions as unknown as Action[];
   const ctx = await loadContext(run);
 
-  let tenant: any = null;
+  let tenant: TenantContext | null = null;
   if (run.startedByUserId) {
     const sub = await prisma.subAccount.findUnique({ where: { id: run.subAccountId } });
     if (sub) {
@@ -181,15 +200,19 @@ export async function runWorkflow(runId: string, fromPosition?: number) {
             workflowRunId: runId,
             actionId: a.id,
             position: a.position,
-            actionType: a.type as any,
+            actionType: a.type as WorkflowActionType,
             status: "WAITING",
             startedAt: new Date(),
             finishedAt: new Date(),
             durationMs: 0,
-            input: a.config ?? {},
-            output: { resumedAt: resumeAt.toISOString() },
+            input: toJson(a.config),
+            output: toJson({ resumedAt: resumeAt.toISOString() }),
           },
-          update: { status: "WAITING", finishedAt: new Date(), output: { resumedAt: resumeAt.toISOString() } },
+          update: {
+            status: "WAITING",
+            finishedAt: new Date(),
+            output: toJson({ resumedAt: resumeAt.toISOString() }),
+          },
         });
         await prisma.workflowRun.update({
           where: { id: runId },
@@ -206,21 +229,21 @@ export async function runWorkflow(runId: string, fromPosition?: number) {
             workflowRunId: runId,
             actionId: a.id,
             position: a.position,
-            actionType: a.type as any,
+            actionType: a.type as WorkflowActionType,
             status: "SUCCESS",
             startedAt: new Date(),
             finishedAt: new Date(),
             durationMs: 0,
-            input: a.config ?? {},
-            output: { result: ok },
+            input: toJson(a.config),
+            output: toJson({ result: ok }),
           },
-          update: { status: "SUCCESS", finishedAt: new Date(), output: { result: ok } },
+          update: { status: "SUCCESS", finishedAt: new Date(), output: toJson({ result: ok }) },
         });
         await prisma.workflowRun.update({ where: { id: runId }, data: { currentActionPosition: a.position } });
 
         if (!ok) {
           // branch: skip to configured position or end
-          const skipTo = a.config?.skipToPosition ?? a.config?.elsePosition ?? null;
+          const skipTo = a.config.skipToPosition ?? a.config.elsePosition ?? null;
           if (skipTo != null) {
             const idx = actions.findIndex((x) => x.position >= Number(skipTo));
             i = idx < 0 ? actions.length : idx;
@@ -243,10 +266,11 @@ export async function runWorkflow(runId: string, fromPosition?: number) {
       where: { id: runId },
       data: { status: "COMPLETED", finishedAt: new Date(), resumeAt: null },
     });
-  } catch (e: any) {
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     await prisma.workflowRun.update({
       where: { id: runId },
-      data: { status: "FAILED", error: String(e?.message ?? e), finishedAt: new Date() },
+      data: { status: "FAILED", error: message, finishedAt: new Date() },
     });
     throw e;
   }

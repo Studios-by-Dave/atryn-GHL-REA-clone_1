@@ -22,7 +22,7 @@ export default async function WorkflowDetailPage({
         <button type="submit" className="rounded bg-black px-3 py-1 text-white">New version</button>
       </form>
       <ul className="mt-4 space-y-2">
-        {workflow.versions.map((v: any) => (
+        {workflow.versions.map((v) => (
           <li key={v.id} className="rounded border p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span>v{v.version} — {v.status}</span>
@@ -51,7 +51,7 @@ export default async function WorkflowDetailPage({
 
       <h2 className="mt-6 text-xl font-semibold">Runs</h2>
       <ul className="mt-2 space-y-2">
-        {runs.map((r: any) => (
+        {runs.map((r) => (
           <li key={r.id} className="rounded border p-3">
             <div className="flex items-center justify-between">
               <span className="font-medium">{r.status}</span>
@@ -60,7 +60,7 @@ export default async function WorkflowDetailPage({
             {r.isTestRun ? <span className="text-xs text-blue-600">test run</span> : null}
             {r.error ? <p className="text-sm text-red-600">{r.error}</p> : null}
             <ul className="mt-2 space-y-1">
-              {r.steps.map((s: any) => (
+              {r.steps.map((s) => (
                 <li key={s.id} className="text-sm">
                   #{s.position} {s.actionType ?? "—"} — {s.status}
                   {s.durationMs != null ? ` (${s.durationMs}ms)` : ""}

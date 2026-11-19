@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/client";
 import { runWorkflow } from "@/server/services/workflow-runner";
 
@@ -44,7 +45,7 @@ export async function publishWorkflowEvent(event: WorkflowEvent): Promise<void> 
           subAccountId: event.subAccountId,
           workflowId: w.id,
           workflowVersionId: v.id,
-          triggerEvent: event as any,
+          triggerEvent: event as unknown as Prisma.InputJsonValue,
           status: "PENDING",
         },
       });

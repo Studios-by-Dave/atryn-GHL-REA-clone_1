@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
 import { hasPermission } from "@/server/rbac/permissions";
 import type { TenantContext } from "@/server/rbac/guards";
 import * as repo from "@/server/repositories/workflows";
@@ -60,7 +61,7 @@ export async function testRunWorkflow(context: TenantContext, workflowId: string
       workflowId: w.id,
       workflowVersionId: w.currentVersionId,
       contactId: contactId ?? undefined,
-      triggerEvent: { type: "MANUAL_TEST", contactId } as any,
+      triggerEvent: { type: "MANUAL_TEST", contactId } as Prisma.InputJsonValue,
       status: "PENDING",
       isTestRun: true,
       startedByUserId: context.userId,
