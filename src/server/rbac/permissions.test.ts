@@ -19,6 +19,8 @@ const expectedPermissions: Record<UserRole, readonly Permission[]> = {
     "forms.write",
     "forms.delete",
     "workflows.read",
+    "messaging.read",
+    "messaging.send",
     "reports.read",
   ],
   CLIENT_USER: ["contacts.read", "opportunities.read"],

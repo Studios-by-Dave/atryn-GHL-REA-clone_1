@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Project state & session handoff
 
-_Last updated: 2026-11-08_
+_Last updated: 2026-11-19_
 
 ## ⏰ Reminders for next session
 
@@ -20,12 +20,12 @@ _Last updated: 2026-11-08_
 
 - Product name: **Atryn** (atryn.com) — working name, revisit branding later
 - Auth: **Auth.js** · Package manager: **npm**
-- Stack: Next.js 16.4.1 (App Router, Turbopack, `cacheComponents`) · Prisma 7 (Rust-free `prisma-client` + `@prisma/adapter-pg`) · Postgres 16 · Tailwind v4 · TypeScript · Vitest
+- Stack: Next.js 16.4.6 (App Router, Turbopack, `cacheComponents`) · Prisma 7 (Rust-free `prisma-client` + `@prisma/adapter-pg`) · Postgres 16 · Tailwind v4 · TypeScript · Vitest
 - Custom, hand-rolled Tailwind UI (no shadcn/ui); lucide-react icons
 
 ## Current state
 
-- **Done:** T1 foundation (`dec8eaf`) · T2 auth/tenancy/RBAC (`714553c`) · T3 app shell + sub-account switcher (`e61bcea`) · T4 contacts CRM (`fd7e773` server layer, `13f5c0d` pages/forms/nav, `7e9ef74` full UI) · T5 pipelines & opportunities (`e5edb2b` + fix `982f90b` — verified by user QA 2026-11-08).
+- **Done:** T1 foundation (`dec8eaf`) · T2 auth/tenancy/RBAC (`714553c`) · T3 app shell + sub-account switcher (`e61bcea`) · T4 contacts CRM (`fd7e773` server layer, `13f5c0d` pages/forms/nav, `7e9ef74` full UI) · T5 pipelines & opportunities (`e5edb2b` + fix `982f90b` — verified by user QA 2026-11-08) · T6 messaging (inbox, providers, webhooks — gates green 2026-11-19, pending live QA). Also merged: Next.js 16.4.1→16.4.6 security upgrade (PR #1, `4266f0c`).
 - **T4 verified live 2026-11-08:** user QA passed — filters/sort, create, tags, notes, archive/restore + flash banners, bulk tag bar, CSV import with merged/skipped counts.
 - **T5 verified live 2026-11-08:** user QA passed — pipeline create (fix `982f90b` restored the missing hidden `subAccountId` field), rename/delete, drag-and-drop with reload persistence, stage editor guards, filters. One initial 403 on pipeline create was the missing hidden field, fixed and re-verified. Pipelines list page (create/rename/delete), board page with dnd-kit drag between stage columns (optimistic move + server action `moveOpportunityAction`), stage history rows on create+move, won/lost terminal semantics (status + wonAt/lostAt sticky once set), stage editor (add/edit/delete, delete guarded when opps present), opportunity create form, board filters (assignee/status/min value/close-before), CLIENT_USER board read locked to assigned opps, `workflow event` stub `OPPORTUNITY_STAGE_CHANGED` in `src/server/events/bus.ts`, schemas test. Gates green: lint, 89 tests, tsc, build.
   - QA plan (from roadmap): create pipeline → drag 5 opps across stages → verify history rows via SQL → reload board → filter by assignee.
@@ -34,6 +34,18 @@ _Last updated: 2026-11-08_
 - Dev DB containers: `atryn-pg`, `atryn-redis`, `atryn-mailpit` (running; `docker start` after reboot — no compose plugin). Dev log: `/tmp/opencode/atryn-dev4.log`.
 
 ## T4/T5 design decisions (locked, 2026-10-31 / 2026-11-08)
+
+## T6 (built 2026-11-19, pending live QA)
+- **One conversation per contact** (`Conversation.contactId` is `@unique`); email + SMS share the thread. `ensureConversation` upserts by `contactId`.
+- **Consent is enforced in one place:** `assertCanSend(contact, channel)` in `src/server/services/messaging.ts` throws `OptOutError` / `MissingAddressError` (both extend `MessagingError`, HTTP 400). Every send path must call it before hitting a provider.
+- **Outbound kill switch:** `OUTBOUND_MESSAGING_ENABLED` must be `"true"` to actually call Resend/Twilio; otherwise providers log `[MOCK SEND]` and return a `mock_*` id. Also requires provider creds + `*_PROVIDER` set. Enforced in `src/server/messaging/providers.ts`.
+- **Send flow:** insert Message `QUEUED` → provider → update `SENT` (+ provider ids/sentAt) or `FAILED` (+ error/failedAt) → touch conversation → audit `message.send`. Provider errors surface as a friendly `MessagingError`.
+- **Webhooks (system, no user session):** Twilio inbound `/api/webhooks/twilio/inbound?subAccountId=<uuid>` (creates/finds contact by normalized phone, appends INBOUND message, increments unread, and sets `smsOptOutAt`/clears it on STOP/START keywords). Twilio status `/api/webhooks/twilio/status`. Resend `/api/webhooks/resend` (vicarious `email.*` events). Idempotency via `WebhookEvent.idempotencyKey` unique (P2002 → treated as duplicate, no-op).
+- **Opt keywords** in `src/features/messaging/schemas.ts` (`parseOptKeyword`, first word only): STOP/STOPALL/UNSUBSCRIBE/CANCEL/END/QUIT/OPTOUT → opt-out; START/YES/UNSTOP/OPTIN → opt-in.
+- **Twilio signature** verification (`src/server/messaging/verify.ts`) only enforced when `TWILIO_VALIDATE_SIGNATURE=true`; Resend Svix signature NOT yet enforced (follow-up).
+- **Permissions:** added `messaging.read` + `messaging.send` (OWNER/ADMIN/AGENT; not CLIENT_USER). Updated `permissions.test.ts` matrix.
+- **UI:** `/s/[subAccountId]/conversations` (list + status/search filter) and `/conversations/[conversationId]` (thread + `MessageCompose` client form via `useActionState`; page marks conversation read on open). Nav "Conversations" enabled in `app-shell.tsx`.
+- **Files:** `src/features/messaging/{schemas,schemas.test,action-state,queries,actions,message-compose}.ts(x)`; `src/server/repositories/messages.ts`; `src/server/services/messaging.ts`; `src/server/messaging/{providers,verify}.ts`; three webhook routes. Gates green: lint, 141 tests, tsc, build.
 
 ## T5 (locked, 2026-11-08)
 - Drag-and-drop is optimistic-only: the board component mutates local card state first, then calls `moveOpportunityAction`; on error it reverts and shows the message. Plain `revalidatePath` handles persistence.
@@ -62,3 +74,7 @@ _Last updated: 2026-11-08_
 - **Shell:** the bash tool's default cwd still points at the pre-rename path (`GoHighLevel REA Clone`); always pass `workdir` explicitly.
 - **`z.coerce.number()` turns `undefined` into `NaN`** and then fails validation — use `.optional().transform(v => v ?? <default>)` when a numeric field may be absent.
 - **`satisfies Prisma.XSelect`**: the select object must be flat (`{ id: true, ... }`), and `GetPayload` args take `{ select: typeof flatObj }` — nesting a `select:` wrapper inside breaks every include that reuses it.
+- **Webhook handlers are system callers:** they have no session, so build a pseudo `TenantContext` with `userId: ""` and never persist that id (the messaging repo only reads `subAccountId`). Don't call `writeAuditLog` from them.
+- **`writeAuditLog` typing:** it wants a `Prisma.TransactionClient`; a bare `prisma` fails the type, so wrap it: `prisma.$transaction((tx) => writeAuditLog(tx, {...}))`.
+- **Webhook idempotency:** rely on `WebhookEvent.idempotencyKey` `@unique` — catch the Prisma error by `error.code === "P2002"` and treat it as a duplicate no-op (don't import the runtime error class; duck-type the `code`).
+- **Outbound is mocked by default:** `OUTBOUND_MESSAGING_ENABLED` must be `"true"` *and* provider creds present to call Resend/Twilio; otherwise adapters log `[MOCK SEND]` and return a `mock_*` provider id. Status webhooks can't match mock ids (expected).
