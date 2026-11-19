@@ -14,7 +14,17 @@ _Last updated: 2026-11-19_
 
 ## ⏰ Reminders for next session
 
+- [ ] **Push local commits** — `master` is **2 ahead of `origin/master`**: `3b05fe4` (Phase 5 lint-debt fix) and `58cbe12` (T6 messaging). Run `git push origin master` once you're happy (e.g. after T6 live QA).
+- [ ] **T6 live QA (pending):** open Conversations → send an email and an SMS from a thread (dev logs `[MOCK SEND]` since `OUTBOUND_MESSAGING_ENABLED="false"`). Hit `/api/webhooks/twilio/inbound?subAccountId=<uuid>` with `From`/`Body=STOP`/`MessageSid` (form-encoded) and confirm the contact's `smsOptOutAt` is set + next SMS send returns the opt-out error.
 - [ ] **Delete the throwaway GitHub repo `DavesHub1234/atryn`** — the `gh` token lacked the `delete_repo` scope. Fix: run `gh auth refresh -h github.com -s delete_repo`, then `gh repo delete DavesHub1234/atryn --yes` (or delete via web UI). The real repo is `Studios-by-Dave/atryn-GHL-REA-clone_1`.
+
+## ▶️ Start here (fresh session)
+
+1. Work from `/home/dave123/Downloads/Websites/Shelby Web Co/Atryn - GoHighLevel REA Clone` (always pass `workdir` explicitly — the bash default cwd points at the old path).
+2. Start dev containers if needed: `docker start atryn-pg atryn-redis atryn-mailpit` (then `docker ps` to confirm).
+3. `npm install` is already done (Next 16.4.6). For a dev server: `npm run dev`.
+4. Before/after changes, run all gates: `npm run lint && npm run test && npm run typecheck && npm run build` (build first if `tsc` complains about `LayoutProps`).
+5. **Next milestone:** finish T6 live QA (above), then **Phase 7 — Appointments** (appointment types, per-user availability, public `/book/[slug]` flow, GiST double-booking guard, reschedule/cancel, confirmation via workflow engine). Roadmap + schema in `docs/INITIAL_DELIVERABLE.md`.
 
 ## Decisions (locked)
 
@@ -33,7 +43,7 @@ _Last updated: 2026-11-19_
 - Roadmap, full schema, access matrix: `docs/INITIAL_DELIVERABLE.md`.
 - Dev DB containers: `atryn-pg`, `atryn-redis`, `atryn-mailpit` (running; `docker start` after reboot — no compose plugin). Dev log: `/tmp/opencode/atryn-dev4.log`.
 
-## T4/T5 design decisions (locked, 2026-10-31 / 2026-11-08)
+## Design decisions by phase (newest first)
 
 ## T6 (built 2026-11-19, pending live QA)
 - **One conversation per contact** (`Conversation.contactId` is `@unique`); email + SMS share the thread. `ensureConversation` upserts by `contactId`.
